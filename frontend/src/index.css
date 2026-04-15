@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tus propiedades CSS existentes */
+@property --border-angle {
+  inherits: false;
+  initial-value: 0deg;
+  syntax: "<angle>";
+}
+
+/* Agregar estas nuevas clases para el layout */
+.layout-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.sidebar-overlay {
+  position: absolute;
+  z-index: 20;
+}
+
+.main-content-full {
+  width: 100%;
+  height: 100%;
+}
+
+/* Tus estilos existentes... */
+.input {
+  @apply w-full bg-slate-800/50 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-slate-200 placeholder-slate-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent;
+}
+
+.auth-input-icon {
+  @apply absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 size-5;
+}
+
+.auth-input-label {
+  @apply block text-sm font-medium text-slate-300 mb-2;
+}
+
+.auth-badge {
+  @apply inline-flex items-center px-3 py-1 text-xs font-medium rounded-full bg-cyan-500/20 text-cyan-300;
+}
+
+.auth-btn {
+  @apply w-full bg-cyan-500 text-white rounded-lg py-2.5 font-medium
+  hover:bg-cyan-600 focus:ring-2 focus:ring-cyan-500;
+}
+
+.auth-link {
+  @apply px-4 py-2 inline-block bg-cyan-500/10 rounded-lg text-cyan-400
+  hover:text-cyan-500 text-sm transition-colors;
+}
+
+/* NUEVOS ESTILOS RESPONSIVE */
+.h-95vh {
+  height: 95vh;
+}
+
+.max-h-95vh {
+  max-height: 95vh;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .h-95vh {
+    height: 100vh;
+  }
+  
+  .max-h-95vh {
+    max-height: 100vh;
+  }
+}
+
+/* Ensure proper scrolling on mobile */
+@supports (-webkit-touch-callout: none) {
+  .h-95vh {
+    height: -webkit-fill-available;
+  }
+}
+
+/* Scrollbar personalizado */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.3);
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+  border-radius: 3px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
