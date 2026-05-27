@@ -34,7 +34,14 @@ const userSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
+      // ✅ CAMPO NUEVO - AGREGAR ESTO:
+    token_acceso: {
+      type: String,
+      unique: true,
+      sparse: true, // Permite que usuarios no tengan token
+    },
   },
+  
   { timestamps: true } // createdAt & updatedAt
 );
 

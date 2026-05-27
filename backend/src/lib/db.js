@@ -11,7 +11,9 @@ export const connectDB = async () => {
 
     mongoose.set("strictQuery", false);
 
-    console.log("Conectando a MongoDB...");
+    if (process.env.NODE_ENV !== 'production') {
+      console.log("Conectando a MongoDB...");
+    }
     
     // CONFIGURACIÓN MEJORADA PARA CONEXIONES ESTABLES
     const conn = await mongoose.connect(MONGO_URI, {
@@ -28,34 +30,48 @@ export const connectDB = async () => {
       waitQueueTimeoutMS: 10000
     });
 
-    console.log("MongoDB conectado exitosamente:", conn.connection.host);
-    console.log("Nombre de la base de datos:", conn.connection.name);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log("MongoDB conectado exitosamente:", conn.connection.host);
+      console.log("Nombre de la base de datos:", conn.connection.name);
+    }
 
     // Manejo de eventos de conexión mejorado
     mongoose.connection.on('error', (err) => {
       console.error('Error de conexión MongoDB:', err.message);
-      console.error('Error details:', err);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Error details:', err);
+      }
     });
 
     mongoose.connection.on('disconnected', () => {
-      console.warn('MongoDB desconectado - Intentando reconectar...');
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('MongoDB desconectado - Intentando reconectar...');
+      }
     });
 
     mongoose.connection.on('reconnected', () => {
-      console.log('MongoDB reconectado exitosamente');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('MongoDB reconectado exitosamente');
+      }
     });
 
     mongoose.connection.on('connecting', () => {
-      console.log('Conectando a MongoDB...');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('Conectando a MongoDB...');
+      }
     });
 
     mongoose.connection.on('connected', () => {
-      console.log('MongoDB conectado');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('MongoDB conectado');
+      }
     });
 
   } catch (error) {
     console.error("Error conectando a MongoDB:", error.message);
-    console.error("Stack trace:", error.stack);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error("Stack trace:", error.stack);
+    }
     process.exit(1);
   }
 };

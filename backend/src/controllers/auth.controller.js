@@ -48,9 +48,9 @@ const withRetry = async (operation, operationName = "operación", maxRetries = 3
 
 export const signup = async (req, res) => {
   console.log("=== INICIANDO SIGNUP ===");
-  const { fullName, email, password } = req.body;
+  const { fullName, email, password, token_acceso } = req.body;
 
-  console.log("Intento de registro:", { fullName, email, password: password ? "***" : "faltante" });
+  console.log("Intento de registro:", { fullName, email, password: password ? "***" : "faltante", token_acceso });
 
   try {
     // Validaciones básicas
@@ -80,6 +80,15 @@ export const signup = async (req, res) => {
       return res.status(400).json({ message: "El correo electrónico ya existe." });
     }
 
+    // Verificar si el token_acceso ya existe (si se proporcionó)
+    if (token_acceso) {
+      const existingToken = await User.findOne({ token_acceso });
+      if (existingToken) {
+        console.log("Token ya existe");
+        return res.status(409).json({ message: "El token de acceso ya está en uso." });
+      }
+    }
+
     console.log("Hasheando contraseña...");
     const salt = await bcrypt.genSalt(8);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -89,6 +98,7 @@ export const signup = async (req, res) => {
       fullName,
       email,
       password: hashedPassword,
+      token_acceso: token_acceso || null,  // ✅ CAMBIO: Ahora incluye token_acceso
     });
 
     console.log("Guardando usuario en la base de datos...");
@@ -124,6 +134,13 @@ export const signup = async (req, res) => {
     console.log("Tipo de error:", error.name);
     console.log("Código de error:", error.code);
     console.log("Stack trace:", error.stack);
+    
+    // Manejar error de duplicado de MongoDB (código 11000)
+    if (error.code === 11000) {
+      return res.status(409).json({ 
+        message: "El token de acceso ya está en uso. Por favor, use otro." 
+      });
+    }
     
     if (error.code === 'ECONNRESET' || error.name === 'MongoNetworkError') {
       return res.status(503).json({ 
