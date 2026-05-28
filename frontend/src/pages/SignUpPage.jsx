@@ -10,7 +10,9 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   AlertCircleIcon,
-  SparklesIcon
+  SparklesIcon,
+  EyeIcon,
+  EyeOffIcon
 } from "lucide-react";
 import { Link } from "react-router";
 import { StrictEmailValidator, validatePassword } from "../lib/validationUtils";
@@ -27,6 +29,7 @@ function SignUpPage() {
     formValid: false
   });
   const [showPasswordValidation, setShowPasswordValidation] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   
   const { signup, isSigningUp } = useAuthStore();
   const emailValidator = new StrictEmailValidator();
@@ -178,13 +181,21 @@ function SignUpPage() {
                     <div className="relative">
                       <LockIcon className="auth-input-icon" />
                       <input
-                        type="password"
+                        type={showPassword ? "text" : "password"} // Cambio dinámico xdxdxd
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         className={`input ${formData.password ? (validation.password.isValid ? 'border-green-500' : validation.password.isValid === false ? 'border-red-500' : '') : ''}`}
                         placeholder="Contraseña"
                         required
                       />
+                    </div>
+
+                    <div
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/3 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOffIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                     </div>
                     <p className="text-slate-400">Nunca compartás tu contraseña con nadie. Nisiquiera con GoChat.</p>
                     
