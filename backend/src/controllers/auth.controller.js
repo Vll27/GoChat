@@ -98,7 +98,7 @@ export const signup = async (req, res) => {
       fullName,
       email,
       password: hashedPassword,
-      token_acceso: token_acceso || null,  // ✅ CAMBIO: Ahora incluye token_acceso
+      token_acceso: token_acceso || undefined,  // Ahora incluye token_acceso
     });
 
     console.log("Guardando usuario en la base de datos...");
