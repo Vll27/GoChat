@@ -33,6 +33,7 @@ function SignUpPage() {
   
   const { signup, isSigningUp } = useAuthStore();
   const emailValidator = new StrictEmailValidator();
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   // Validación en tiempo real
   useEffect(() => {
@@ -89,8 +90,19 @@ function SignUpPage() {
   };
 
   return (
-    <div className="w-full flex items-center justify-center p-4 bg-slate-900 min-h-screen">
-      <div className="relative w-full max-w-6xl md:h-[800px] h-auto">
+    <div className="w-full flex items-center justify-center p-4 bg-black min-h-screen relative overflow-hidden group"
+      onMouseMove={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setMousePos = ({x: e.clientX - rect.left, y: e.clientY - rect.top})
+      }}>
+        {/* Efecto de luz radia cyan */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out"
+          style={{
+            background: `radial-gradient(600px circle at ${mousePos.x}px ${mousePos.y}px, rgba(6, 182, 212, 0.15), transparent 75%)`,
+          }}
+        />
+        <div className="relative w-full max-w-6xl md:h-[800px] h-auto z-10">
         <BorderAnimatedContainer>
           <div className="w-full flex flex-col md:flex-row">
             {/* COLUMNA DE FORMULARIO - LADO IZQUIERDO */}
