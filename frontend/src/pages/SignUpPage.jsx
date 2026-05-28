@@ -96,8 +96,8 @@ function SignUpPage() {
                 {/* TEXTO DEL TÍTULO */}
                 <div className="text-center mb-8">
                   <MessageCircleIcon className="w-12 h-12 mx-auto text-slate-400 mb-4" />
-                  <h2 className="text-2xl font-bold text-slate-200 mb-2">Crear una cuenta</h2>
-                  <p className="text-slate-400">Regístrate para obtener una nueva cuenta</p>
+                  <h2 className="text-2xl font-bold text-slate-200 mb-2">Crear cuenta</h2>
+                  <p className="text-slate-400">Registráte y empezá ya en GoChat.</p>
                 </div>
 
                 {/* FORM */}
@@ -112,7 +112,7 @@ function SignUpPage() {
                         value={formData.fullName}
                         onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                         className="input"
-                        placeholder="Octavio Cortez"
+                        placeholder="Su usuario"
                         required
                       />
                     </div>
@@ -128,7 +128,7 @@ function SignUpPage() {
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         className={`input ${formData.email ? (validation.email.valid ? 'border-green-500' : validation.email.valid === false ? 'border-red-500' : '') : ''}`}
-                        placeholder="octa@gmail.com"
+                        placeholder="correo@dominio.com"
                         required
                       />
                     </div>
@@ -182,10 +182,11 @@ function SignUpPage() {
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         className={`input ${formData.password ? (validation.password.isValid ? 'border-green-500' : validation.password.isValid === false ? 'border-red-500' : '') : ''}`}
-                        placeholder="Introduce tu contraseña"
+                        placeholder="Contraseña"
                         required
                       />
                     </div>
+                    <p className="text-slate-400">Nunca compartás tu contraseña con nadie. Nisiquiera con GoChat.</p>
                     
                     {/* Indicador de fortaleza de contraseña - SOLO SE MUESTRA SI NO ES VÁLIDA */}
                     {formData.password && showPasswordValidation && !validation.password.isValid && (
@@ -248,7 +249,7 @@ function SignUpPage() {
                           <span>Creando cuenta...</span>
                         </div>
                       ) : (
-                        "Crear una cuenta"
+                        "Crear cuenta"
                       )}
                     </button>
                   </div>
@@ -256,7 +257,7 @@ function SignUpPage() {
 
                 <div className="mt-8 text-center">
                   <Link to="/login" className="auth-link hover:text-cyan-300 transition-colors">
-                    ¿Ya tienes una cuenta? Inicia sesión
+                    ¿Ya tenés cuenta? ¡Iniciá sesión!
                   </Link>
                 </div>
               </div>
@@ -267,15 +268,16 @@ function SignUpPage() {
               <div className="text-center">
                 <img
                   src="/signup.png"
-                  alt="Personas usando dispositivos móviles"
+                  alt="Personas usando GoChat"
                   className="w-full max-w-md h-auto object-contain mx-auto"
                 />
                 <div className="mt-6 text-center">
-                  <h3 className="text-xl font-medium text-cyan-400">Comienza tu viaje hoy</h3>
+                  <h3 className="text-xl font-medium text-cyan-400">Comenzá en GoChat hoy</h3>
                   <div className="mt-4 flex justify-center gap-3">
                     <span className="auth-badge bg-cyan-500/20 text-cyan-300">Gratis</span>
                     <span className="auth-badge bg-green-500/20 text-green-300">Fácil</span>
                     <span className="auth-badge bg-purple-500/20 text-purple-300">Privado</span>
+                    <span className="auth-badge bg-yellow-500/20 text-yellow-300">Personalizable</span>
                   </div>
                 </div>
               </div>
