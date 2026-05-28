@@ -134,10 +134,22 @@ function MessageInput() {
     if (!text.trim() && !imagePreview) return;
     if (isSoundEnabled) playRandomKeyStrokeSound();
 
+    // Preparar payload para servidor: FormData si hay archivo, JSON si no
+    const file = fileInputRef.current?.files?.[0];
+    let payloadForServer;
+    if (file) {
+      const fd = new FormData();
+      if (text.trim()) fd.append("text", text.trim());
+      fd.append("image", file);
+      payloadForServer = fd;
+    } else {
+      payloadForServer = { text: text.trim(), image: imagePreview };
+    }
+
     sendMessage({
       text: text.trim(),
       image: imagePreview,
-    });
+    }, payloadForServer);
     setText("");
     setImagePreview("");
     setShowEmojiPicker(false);

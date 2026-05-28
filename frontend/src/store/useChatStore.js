@@ -148,7 +148,7 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  sendMessage: async (messageData) => {
+  sendMessage: async (messageData, payloadForServer) => {
     const { selectedUser, messages, updateChatLastMessage } = get();
     const { authUser } = useAuthStore.getState();
 
@@ -173,7 +173,8 @@ export const useChatStore = create((set, get) => ({
     updateChatLastMessage(optimisticMessage, true);
 
     try {
-      const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
+      // Si payloadForServer es FormData, dejar que axios establezca los headers
+      const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, payloadForServer ?? messageData);
       
       const finalMessages = messages.filter(msg => msg._id !== tempId).concat(res.data);
       set({ messages: finalMessages });
