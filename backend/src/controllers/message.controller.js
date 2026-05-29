@@ -3,6 +3,27 @@ import cloudinary from "../lib/cloudinary.js";
 import { getReceiverSocketId, io } from "../lib/socket.js";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
+import { Readable } from "stream";
+
+const uploadBufferToCloudinary = (buffer) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: "chat-images",
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve(result);
+      }
+    );
+
+    Readable.from(buffer).pipe(uploadStream);
+  });
+};
 
 export const getAllContacts = async (req, res) => {
   try {
@@ -78,11 +99,12 @@ export const getMessagesByUserId = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
   try {
-    const { text, image } = req.body;
+    const { text } = req.body;
     const { id: receiverId } = req.params;
     const senderId = req.user._id;
+    const imageFile = req.file;
 
-    if (!text && !image) {
+    if (!text && !imageFile) {
       return res.status(400).json({ message: "Se requiere texto o imagen." });
     }
     if (senderId.equals(receiverId)) {
@@ -94,8 +116,8 @@ export const sendMessage = async (req, res) => {
     }
 
     let imageUrl;
-    if (image) {
-      const uploadResponse = await cloudinary.uploader.upload(image);
+    if (imageFile?.buffer) {
+      const uploadResponse = await uploadBufferToCloudinary(imageFile.buffer);
       imageUrl = uploadResponse.secure_url;
     }
 

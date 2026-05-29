@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, XIcon } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import ChatHeader from "./ChatHeader";
@@ -7,6 +8,9 @@ import MessageInput from "./MessageInput";
 import MessagesLoadingSkeleton from "./MessagesLoadingSkeleton";
 
 function ChatContainer() {
+  const [selectedImg, setSelectedImg] = useState(null);
+  const [selectedImgIndex, setSelectedImgIndex] = useState(-1);
+  const [isImageModalVisible, setIsImageModalVisible] = useState(false);
   const {
     selectedUser,
     getMessagesByUserId,
@@ -20,6 +24,9 @@ function ChatContainer() {
   const messageEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const isFirstLoad = useRef(true);
+  const closeModalTimerRef = useRef(null);
+
+  const imageMessages = messages.filter((message) => message.image);
 
   useEffect(() => {
     if (selectedUser && selectedUser._id) {
@@ -89,6 +96,85 @@ function ChatContainer() {
     }
   };
 
+  const openImageModal = (imageUrl, index) => {
+    if (closeModalTimerRef.current) {
+      clearTimeout(closeModalTimerRef.current);
+    }
+
+    setSelectedImg(imageUrl);
+    setSelectedImgIndex(index);
+    setIsImageModalVisible(false);
+
+    requestAnimationFrame(() => {
+      setIsImageModalVisible(true);
+    });
+  };
+
+  const closeImageModal = () => {
+    setIsImageModalVisible(false);
+
+    if (closeModalTimerRef.current) {
+      clearTimeout(closeModalTimerRef.current);
+    }
+
+    closeModalTimerRef.current = setTimeout(() => {
+      setSelectedImg(null);
+      setSelectedImgIndex(-1);
+    }, 180);
+  };
+
+  const navigateImage = (direction) => {
+    if (!imageMessages.length) return;
+
+    const nextIndex = (selectedImgIndex + direction + imageMessages.length) % imageMessages.length;
+    const nextImage = imageMessages[nextIndex];
+
+    if (!nextImage?.image) return;
+
+    setSelectedImg(nextImage.image);
+    setSelectedImgIndex(nextIndex);
+  };
+
+  useEffect(() => {
+    if (!selectedImg) return;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeImageModal();
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        event.stopPropagation();
+        navigateImage(-1);
+        return;
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        event.stopPropagation();
+        navigateImage(1);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [selectedImg, selectedImgIndex, imageMessages]);
+
+  useEffect(() => {
+    return () => {
+      if (closeModalTimerRef.current) {
+        clearTimeout(closeModalTimerRef.current);
+      }
+    };
+  }, []);
+
   return (
     <div className="flex flex-col h-full w-full">
       <ChatHeader />
@@ -113,11 +199,18 @@ function ChatContainer() {
                     } ${msg.isOptimistic ? "opacity-70 animate-pulse" : ""}`}
                   >
                     {msg.image && (
-                      <img 
-                        src={msg.image} 
-                        alt="Shared" 
-                        className="rounded-lg mb-2 max-w-full h-auto object-cover max-h-64" 
-                      />
+                      <button
+                        type="button"
+                        onClick={() => openImageModal(msg.image, imageMessages.findIndex((imageMessage) => imageMessage._id === msg._id))}
+                        className="block mb-2 rounded-lg overflow-hidden max-w-full"
+                        title="Abrir imagen"
+                      >
+                        <img 
+                          src={msg.image} 
+                          alt="Shared" 
+                          className="rounded-lg max-w-full h-auto object-cover max-h-64 hover:opacity-90 transition-opacity cursor-zoom-in" 
+                        />
+                      </button>
                     )}
                     
                     {msg.text && (
@@ -144,6 +237,66 @@ function ChatContainer() {
       </div>
 
       <MessageInput />
+
+      {selectedImg && (
+        <div
+          className={`fixed inset-0 z-[999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-200 ${
+            isImageModalVisible ? "opacity-100" : "opacity-0"
+          }`}
+          onClick={closeImageModal}
+        >
+          <div
+            className={`relative max-w-5xl max-h-full transform transition-all duration-200 ease-out ${
+              isImageModalVisible ? "scale-100 opacity-100" : "scale-95 opacity-0"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={closeImageModal}
+              className="absolute -top-3 -right-3 z-10 w-10 h-10 rounded-full bg-slate-900/90 text-white flex items-center justify-center border border-slate-700 hover:bg-slate-800 transition-colors"
+              aria-label="Cerrar imagen"
+              title="Cerrar"
+            >
+              ✕
+            </button>
+
+            <img
+              src={selectedImg}
+              alt="Preview fullscreen"
+              className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl"
+            />
+
+            {imageMessages.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigateImage(-1)}
+                  className="absolute left-[-3.5rem] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-slate-900/90 text-white border border-slate-700 flex items-center justify-center hover:bg-slate-800 transition-colors"
+                  aria-label="Imagen anterior"
+                  title="Anterior"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateImage(1)}
+                  className="absolute right-[-3.5rem] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-slate-900/90 text-white border border-slate-700 flex items-center justify-center hover:bg-slate-800 transition-colors"
+                  aria-label="Imagen siguiente"
+                  title="Siguiente"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
+
+            <div className="absolute bottom-[-2.5rem] left-1/2 -translate-x-1/2 text-xs text-slate-300 bg-slate-900/80 border border-slate-700 rounded-full px-3 py-1">
+              {selectedImgIndex + 1} / {imageMessages.length}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

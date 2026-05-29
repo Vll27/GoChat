@@ -96,15 +96,15 @@ function SignUpPage() {
                 {/* TEXTO DEL TÍTULO */}
                 <div className="text-center mb-8">
                   <MessageCircleIcon className="w-12 h-12 mx-auto text-slate-400 mb-4" />
-                  <h2 className="text-2xl font-bold text-slate-200 mb-2">Crear una cuenta</h2>
-                  <p className="text-slate-400">Regístrate para obtener una nueva cuenta</p>
+                  <h2 className="text-2xl font-bold text-slate-200 mb-2">Crear cuenta</h2>
+                  <p className="text-slate-400">Ingresá los siguientes datos para empezar a chatear.</p>
                 </div>
 
                 {/* FORM */}
                 <form onSubmit={handleSubmit} className="space-y-8">
                   {/* NOMBRE COMPLETO */}
                   <div className="space-y-2">
-                    <label className="auth-input-label">Nombre completo</label>
+                    <label className="auth-input-label">Usuario</label>
                     <div className="relative">
                       <UserIcon className="auth-input-icon" />
                       <input
@@ -128,7 +128,7 @@ function SignUpPage() {
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         className={`input ${formData.email ? (validation.email.valid ? 'border-green-500' : validation.email.valid === false ? 'border-red-500' : '') : ''}`}
-                        placeholder="octa@gmail.com"
+                        placeholder="correo@dominio.com"
                         required
                       />
                     </div>

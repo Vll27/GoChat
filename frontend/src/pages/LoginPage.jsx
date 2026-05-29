@@ -24,8 +24,8 @@ function LoginPage() {
                 {/* HEADING TEXT */}
                 <div className="text-center mb-8">
                   <MessageCircleIcon className="w-12 h-12 mx-auto text-slate-400 mb-4" />
-                  <h2 className="text-2xl font-bold text-slate-200 mb-2">Bienvenido de nuevo</h2>
-                  <p className="text-slate-400">Inicia sesión para acceder a tu cuenta</p>
+                  <h2 className="text-2xl font-bold text-slate-200 mb-2">Bienvenido</h2>
+                  <p className="text-slate-400">Inicie sesión para acceder.</p>
                 </div>
 
                 {/* FORM */}
@@ -41,7 +41,7 @@ function LoginPage() {
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         className="input"
-                        placeholder="amilkar@gmail.com"
+                        placeholder="correo@dominio.com"
                       />
                     </div>
                   </div>
@@ -57,7 +57,7 @@ function LoginPage() {
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         className="input"
-                        placeholder="Introduce tu contraseña"
+                        placeholder="Contraseña"
                       />
                     </div>
                   </div>
@@ -89,7 +89,7 @@ function LoginPage() {
                   className="w-full h-auto object-contain"
                 />
                 <div className="mt-6 text-center">
-                  <h3 className="text-xl font-medium text-cyan-400">Conéctate cuando quieras y donde quieras.</h3>
+                  <h3 className="text-xl font-medium text-cyan-400">Conectáte cuando querrás y dónde querrás.</h3>
 
                   <div className="mt-4 flex justify-center gap-4">
                     <span className="auth-badge">Gratis</span>
