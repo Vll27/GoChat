@@ -15,6 +15,8 @@ model User {
   profilePic      String    @default("")
   pendingRequests String[]  @db.ObjectId
   contacts        String[]  @db.ObjectId
+  lastSeen        DateTime? @default(now())  // 👈 NUEVO: última vez que el usuario estuvo activo
+  lastSeenStatus  String    @default("offline") // 👈 NUEVO: "online", "offline", "away"
   sentMessages    Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
   createdAt       DateTime  @default(now())

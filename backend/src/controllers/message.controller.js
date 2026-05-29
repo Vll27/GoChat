@@ -9,16 +9,13 @@ export const getAllContacts = async (req, res) => {
     const loggedInUserId = req.user._id;
     const { search } = req.query;
 
-    // Cargar el usuario logueado para obtener sus contactos aceptados
     const me = await User.findById(loggedInUserId).select("contacts");
     if (!me) return res.status(404).json({ message: "Usuario no encontrado" });
 
-    // Si el usuario no tiene contactos, retornar lista vacía
     if (!me.contacts || me.contacts.length === 0) {
       return res.status(200).json([]);
     }
 
-    // Construir filtro para obtener solo contactos aceptados
     const filter = { _id: { $in: me.contacts } };
     if (search) {
       filter.$or = [
@@ -35,7 +32,6 @@ export const getAllContacts = async (req, res) => {
   }
 };
 
-// Buscar usuarios globalmente (para enviar solicitudes de contacto). Excluye al propio solicitante.
 export const searchUsers = async (req, res) => {
   try {
     const loggedInUserId = req.user._id;
@@ -66,13 +62,12 @@ export const getMessagesByUserId = async (req, res) => {
     const myId = req.user._id;
     const { id: userToChatId } = req.params;
 
-    // MANTENER orden ascendente (más antiguo primero) para WhatsApp/Telegram
     const messages = await Message.find({
       $or: [
         { senderId: myId, receiverId: userToChatId },
         { senderId: userToChatId, receiverId: myId },
       ],
-    }).sort({ createdAt: 1 }); // Mantener 1 (ascendente) para WhatsApp/Telegram
+    }).sort({ createdAt: 1 });
 
     res.status(200).json(messages);
   } catch (error) {
@@ -113,19 +108,16 @@ export const sendMessage = async (req, res) => {
 
     await newMessage.save();
 
-    // Obtener los socket IDs de ambos usuarios
     const receiverSocketId = getReceiverSocketId(receiverId);
     const senderSocketId = getReceiverSocketId(senderId.toString());
 
     console.log("Enviando mensaje - Emisor:", req.user.fullName, "Receptor:", receiverId);
     console.log("Socket IDs - Receptor:", receiverSocketId, "Emisor:", senderSocketId);
 
-    // Emitir nuevo mensaje al receptor
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("newMessage", newMessage);
       console.log("Evento newMessage enviado al receptor");
       
-      // Asegurar que se envíe el nombre del remitente
       io.to(receiverSocketId).emit("messageNotification", {
         message: newMessage,
         senderName: req.user.fullName,
@@ -134,7 +126,6 @@ export const sendMessage = async (req, res) => {
       console.log("Evento messageNotification enviado al receptor");
     }
 
-    // Emitir actualización de chats a AMBOS usuarios
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("chatsUpdated");
       console.log("Evento chatsUpdated enviado al receptor");
@@ -156,7 +147,6 @@ export const getChatPartners = async (req, res) => {
   try {
     const loggedInUserId = req.user._id;
 
-    // CONSULTA OPTIMIZADA - Encontrar las conversaciones más recientes
     const recentConversations = await Message.aggregate([
       {
         $match: {
@@ -184,26 +174,24 @@ export const getChatPartners = async (req, res) => {
       {
         $sort: { "lastMessage.createdAt": -1 }
       },
-      { $limit: 50 } // Limitar a 50 conversaciones para evitar sobrecarga
+      { $limit: 50 }
     ]);
 
     if (recentConversations.length === 0) {
       return res.status(200).json([]);
     }
 
-    // Obtener información de los usuarios
     const partnerIds = recentConversations.map(conv => conv._id);
+    
     const chatPartners = await User.find({ 
       _id: { $in: partnerIds } 
     }).select("-password");
 
-    // Crear mapa para acceso rápido
     const partnerMap = new Map();
     chatPartners.forEach(partner => {
       partnerMap.set(partner._id.toString(), partner);
     });
 
-    // Formatear la respuesta
     const chats = recentConversations.map(conv => {
       const partner = partnerMap.get(conv._id.toString());
       if (!partner) return null;
@@ -214,7 +202,9 @@ export const getChatPartners = async (req, res) => {
           _id: partner._id,
           fullName: partner.fullName,
           email: partner.email,
-          profilePic: partner.profilePic
+          profilePic: partner.profilePic,
+          lastSeen: partner.lastSeen || null,
+          lastSeenStatus: partner.lastSeenStatus || "offline"
         },
         lastMessage: {
           _id: conv.lastMessage._id,

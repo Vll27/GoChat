@@ -20,29 +20,33 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-    // users who sent a contact request to this user
+    token_acceso: {
+      type: String,
+      sparse: true,
+    },
     pendingRequests: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
       },
     ],
-    // accepted contacts
     contacts: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
       },
     ],
-      // ✅ CAMPO NUEVO - AGREGAR ESTO:
-    token_acceso: {
+    lastSeen: {
+      type: Date,
+      default: Date.now,
+    },
+    lastSeenStatus: {
       type: String,
-      unique: true,
-      sparse: true, // Permite que usuarios no tengan token
+      enum: ["online", "offline", "away"],
+      default: "offline",
     },
   },
-  
-  { timestamps: true } // createdAt & updatedAt
+  { timestamps: true }
 );
 
 const User = mongoose.model("User", userSchema);
