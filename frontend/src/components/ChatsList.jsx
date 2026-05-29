@@ -115,7 +115,10 @@ function ChatsList({ compact = false }) {
             {/* Badge de mensajes no leídos en modo compacto */}
             {compact && chat.unreadCount > 0 && (
               <div className="absolute -top-1 -right-1">
-                <span className="bg-cyan-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center text-[10px]">
+                <span 
+                  className="text-white text-xs rounded-full w-5 h-5 flex items-center justify-center text-[10px]"
+                  style={{ backgroundColor: "var(--theme-primary)" }}
+                >
                   {chat.unreadCount > 9 ? '9+' : chat.unreadCount}
                 </span>
               </div>
@@ -142,7 +145,10 @@ function ChatsList({ compact = false }) {
               
               {chat.unreadCount > 0 && (
                 <div className="flex justify-end mt-1">
-                  <span className="bg-cyan-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  <span 
+                    className="text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                    style={{ backgroundColor: "var(--theme-primary)" }}
+                  >
                     {chat.unreadCount > 9 ? '9+' : chat.unreadCount}
                   </span>
                 </div>

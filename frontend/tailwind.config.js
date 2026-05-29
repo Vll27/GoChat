@@ -17,6 +17,9 @@ export default {
           to: { "--border-angle": "360deg" },
         },
       },
+      colors: {
+        primary: "var(--theme-primary)",
+      },
     },
   },
   plugins: [daisyui],

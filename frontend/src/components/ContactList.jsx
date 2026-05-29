@@ -4,7 +4,7 @@ import { useAuthStore } from "../store/useAuthStore";
 import UsersLoadingSkeleton from "./UsersLoadingSkeleton";
 
 function ContactList({ compact = false }) {
-  const { getAllContacts, allContacts, isUsersLoading, setSelectedUser } = useChatStore();
+  const { getAllContacts, allContacts, isUsersLoading, setSelectedUser, selectedUser } = useChatStore();
   const { onlineUsers } = useAuthStore();
 
   useEffect(() => {
@@ -20,8 +20,8 @@ function ContactList({ compact = false }) {
           key={contact._id}
           onClick={() => setSelectedUser(contact)}
           className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-            compact ? "justify-center" : "hover:bg-slate-700/30"
-          }`}
+            compact ? "justify-center hover:bg-slate-700/30" : "hover:bg-slate-700/30"
+          } ${selectedUser?._id === contact._id ? "bg-slate-700/50" : ""}`}
           title={compact ? contact.fullName : ""}
         >
           {/* Avatar con indicador online */}

@@ -5,6 +5,7 @@ import ChatHeader from "./ChatHeader";
 import NoChatHistoryPlaceholder from "./NoChatHistoryPlaceholder";
 import MessageInput from "./MessageInput";
 import MessagesLoadingSkeleton from "./MessagesLoadingSkeleton";
+import { useConfigStore } from "../store/useConfigStore"; // 1. Importamos el store de configuración
 
 function ChatContainer() {
   const {
@@ -20,6 +21,9 @@ function ChatContainer() {
   const messageEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const isFirstLoad = useRef(true);
+  
+  const { chatWallpaper } = useConfigStore(); // 2. Consumimos el fondo definitivo guardado
+  const { themeColor, receiverColor, isTextBold, chatFontSize, globalFont } = useConfigStore();
 
   useEffect(() => {
     if (selectedUser && selectedUser._id) {
@@ -90,60 +94,91 @@ function ChatContainer() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full">
-      <ChatHeader />
-      
-      <div 
-        ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto w-full min-h-0 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800"
-      >
-        {messages.length > 0 && !isMessagesLoading ? (
-          <div className="w-full min-h-full flex flex-col justify-end">
-            <div className="w-full p-2 md:p-4 space-y-3">
-              {messages.map((msg) => (
-                <div
-                  key={msg._id || `temp-${msg.createdAt}-${msg.text}`}
-                  className={`flex ${msg.senderId === authUser._id ? "justify-end" : "justify-start"}`}
-                >
+    /* 3. CORREGIDO: Aplicamos el fondo dinámico en la raíz del contenedor del chat */
+    <div 
+      className="flex flex-col h-full w-full relative transition-all duration-300 bg-black"
+      style={{
+        backgroundImage: chatWallpaper ? `url(${chatWallpaper})` : "none",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
+    >
+      {/* 4. OPTIMIZACIÓN UX: Capa oscura reguladora de contraste para proteger la lectura */}
+      {chatWallpaper && (
+        <div className="absolute inset-0 bg-black/40 pointer-events-none z-0" />
+      )}
+
+      {/* 5. ESTRUCTURA: Envolvemos los componentes internos con z-10 y posición relativa 
+          para que se rendericen por encima del fondo o de la capa oscura */}
+      <div className="relative z-10 flex flex-col h-full w-full min-h-0">
+        <ChatHeader />
+        
+        <div 
+          ref={messagesContainerRef}
+          className="flex-1 overflow-y-auto w-full min-h-0 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800"
+        >
+          {messages.length > 0 && !isMessagesLoading ? (
+            <div className="w-full min-h-full flex flex-col justify-end">
+              <div className="w-full p-2 md:p-4 space-y-3">
+                {messages.map((msg) => (
                   <div
-                    className={`max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl rounded-2xl px-4 py-3 ${
-                      msg.senderId === authUser._id
-                        ? "bg-cyan-600 text-white rounded-br-none"
-                        : "bg-slate-800 text-slate-200 rounded-bl-none"
-                    } ${msg.isOptimistic ? "opacity-70 animate-pulse" : ""}`}
+                    key={msg._id || `temp-${msg.createdAt}-${msg.text}`}
+                    className={`flex ${msg.senderId === authUser._id ? "justify-end" : "justify-start"}`}
                   >
-                    {msg.image && (
-                      <img 
-                        src={msg.image} 
-                        alt="Imagen enviada" 
-                        className="rounded-lg mb-2 max-w-full h-auto object-cover max-h-64" 
-                      />
-                    )}
-                    
-                    {msg.text && (
-                      <p className="break-words whitespace-pre-wrap text-base leading-relaxed">
-                        {msg.text}
-                      </p>
-                    )}
-                    
-                    <div className={`text-xs mt-2 opacity-75 ${msg.senderId === authUser._id ? "text-right" : "text-left"}`}>
-                      {formatMessageTime(msg.createdAt)}
-                      {msg.isOptimistic && " ⏳"}
+                    <div
+                      className={`max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl rounded-2xl px-4 py-3 shadow-md ${
+      msg.senderId === authUser._id
+        ? "text-white rounded-br-none" 
+        : "text-slate-100 rounded-bl-none border border-slate-700/20"
+    } ${msg.isOptimistic ? "opacity-70 animate-pulse" : ""}`}
+    // Controlamos el fondo de forma dinámica e infalible mediante style
+    style={
+      msg.senderId === authUser._id
+        ? {
+            backgroundColor: "var(--theme-primary)",
+            fontWeight: "var(--chat-font-weight)",
+            fontSize: "var(--chat-font-size)",
+          }
+        : {
+            backgroundColor: "var(--theme-receiver)",
+            fontWeight: "var(--chat-font-weight)",
+            fontSize: "var(--chat-font-size)",
+          }
+    }
+                    >
+                      {msg.image && (
+                        <img 
+                          src={msg.image} 
+                          alt="Imagen enviada" 
+                          className="rounded-lg mb-2 max-w-full h-auto object-cover max-h-64" 
+                        />
+                      )}
+                      
+                      {msg.text && (
+                        <p className="break-words whitespace-pre-wrap text-base leading-relaxed">
+                          {msg.text}
+                        </p>
+                      )}
+                      
+                      <div className={`text-xs mt-2 opacity-75 ${msg.senderId === authUser._id ? "text-right" : "text-left"}`}>
+                        {formatMessageTime(msg.createdAt)}
+                        {msg.isOptimistic && " ⏳"}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-              <div ref={messageEndRef} className="h-4" />
+                ))}
+                <div ref={messageEndRef} className="h-4" />
+              </div>
             </div>
-          </div>
-        ) : isMessagesLoading ? (
-          <MessagesLoadingSkeleton />
-        ) : (
-          <NoChatHistoryPlaceholder name={selectedUser?.fullName} />
-        )}
-      </div>
+          ) : isMessagesLoading ? (
+            <MessagesLoadingSkeleton />
+          ) : (
+            <NoChatHistoryPlaceholder name={selectedUser?.fullName} />
+          )}
+        </div>
 
-      <MessageInput />
+        <MessageInput />
+      </div>
     </div>
   );
 }
