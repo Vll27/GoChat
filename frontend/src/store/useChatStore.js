@@ -13,6 +13,8 @@ export const useChatStore = create((set, get) => ({
   isMessagesLoading: false,
   isSoundEnabled: JSON.parse(localStorage.getItem("isSoundEnabled")) !== false,
   isWindowFocused: true,
+  messageInputText: "",
+  setMessageInputText: (text) => set({ messageInputText: text }),
 
   toggleSound: () => {
     const newValue = !get().isSoundEnabled;

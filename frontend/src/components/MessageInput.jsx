@@ -7,6 +7,7 @@ import { ImageIcon, SendIcon, XIcon, SmileIcon, SearchIcon } from "lucide-react"
 function MessageInput() {
   const { playRandomKeyStrokeSound } = useKeyboardSound();
   const [text, setText] = useState("");
+  const { messageInputText, setMessageInputText } = useChatStore();;
   const [imagePreview, setImagePreview] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -131,14 +132,16 @@ function MessageInput() {
 
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (!text.trim() && !imagePreview) return;
+    
+    if (!messageInputText.trim() && !imagePreview) return;
     if (isSoundEnabled) playRandomKeyStrokeSound();
 
     sendMessage({
-      text: text.trim(),
+      text: messageInputText.trim(), 
       image: imagePreview,
     });
-    setText("");
+  
+    setMessageInputText("");
     setImagePreview("");
     setShowEmojiPicker(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -311,9 +314,9 @@ function MessageInput() {
           <input
             ref={textInputRef}
             type="text"
-            value={text}
+            value={messageInputText}
             onChange={(e) => {
-              setText(e.target.value);
+              setMessageInputText(e.target.value);
               isSoundEnabled && playRandomKeyStrokeSound();
             }}
             onKeyPress={handleKeyPress}
@@ -347,7 +350,7 @@ function MessageInput() {
           
           <button
             type="submit"
-            disabled={!text.trim() && !imagePreview}
+            disabled={!messageInputText.trim() && !imagePreview}
             className="p-2 bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-lg font-medium hover:from-cyan-600 hover:to-cyan-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg shadow-cyan-500/20"
             title="Enviar mensaje"
           >

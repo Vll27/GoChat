@@ -1,143 +1,83 @@
 import { useState, useEffect } from "react";
 import { useChatStore } from "../store/useChatStore";
-import BorderAnimatedContainer from "../components/BorderAnimatedContainer";
 import ProfileHeader from "../components/ProfileHeader";
 import ActiveTabSwitch from "../components/ActiveTabSwitch";
 import ChatsList from "../components/ChatsList";
 import ContactList from "../components/ContactList";
 import ChatContainer from "../components/ChatContainer";
-import NoConversationPlaceholder from "../components/NoConversationPlaceholder";
 
 function ChatPage() {
   const { activeTab, selectedUser, setSelectedUser } = useChatStore();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // ← Inicialmente CERRADO
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      
-      // En móvil: sidebar cerrado, en desktop: sidebar abierto
-      if (mobile) {
-        setIsSidebarOpen(false);
-      } else {
-        setIsSidebarOpen(true);
-      }
-    };
-
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
-    // Ejecutar inmediatamente al montar
-    handleResize();
-    
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  useEffect(() => {
-    if (selectedUser && isMobile) {
-      setIsSidebarOpen(false);
-    }
-  }, [selectedUser, isMobile]);
-
-  useEffect(() => {
-    if (isSidebarOpen && isMobile) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [isSidebarOpen, isMobile]);
-
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
-
   return (
-    <div className="w-full h-screen bg-slate-900 absolute inset-0">
-      <BorderAnimatedContainer className="w-full h-full">
-        <div className="flex w-full h-full relative">
+  // Fondo negro sólido, estático y limpio para descansar la vista
+  <div className="w-full h-screen bg-black absolute inset-0 overflow-hidden">
+    
+    <div className="w-full h-full relative z-10">
+      {/* Se elimina BorderAnimatedContainer por cansar la vista y se mantiene un fondo negro para optimizar la lectura.*/}
+        {/* Contenedor viewport con máscara para ocultar lo que se desplaza a los lados */}
+        <div className="w-full h-full relative overflow-hidden flex items-center justify-center">
           
-          {/* Sidebar - MEJORADA la lógica de visibilidad */}
-          <aside
-            className={`bg-slate-800/50 backdrop-blur-sm flex flex-col transition-all duration-300 ease-in-out h-full z-20
-              ${isSidebarOpen ? (isMobile ? "w-80" : "w-80") : (isMobile ? "w-0 -left-full" : "w-20")} 
-              ${isMobile ? "absolute" : "relative"}
+          {/* ================= BURBUJA 1: LISTA DE CONTACTOS / CHATS ================= */}
+          <div
+            className={`w-full max-w-md h-[90vh] bg-slate-800/60 backdrop-blur-md rounded-2xl border border-slate-700/40 flex flex-col p-4 shadow-2xl transition-all duration-500 ease-in-out absolute z-10
+              ${selectedUser 
+                ? "-translate-x-[120%] opacity-0 pointer-events-none scale-95" 
+                : "translate-x-0 opacity-100 scale-100"
+              }
             `}
           >
-            {/* Header del sidebar */}
-            <div className={`${!isSidebarOpen && !isMobile ? "hidden" : "flex"} items-center justify-between p-3 border-b border-slate-700/50 min-h-[64px] flex-shrink-0`}>
-              <div className="flex items-center gap-3">
-                <ProfileHeader 
-                  compact={!isSidebarOpen && !isMobile} 
-                  onMenuToggle={toggleSidebar}
-                />
-              </div>
+            {/* Header del panel central */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-700/50 flex-shrink-0">
+              <ProfileHeader compact={false} />
             </div>
 
-            {/* Tabs */}
-            <div className={`${!isSidebarOpen && !isMobile ? "hidden" : "block"} p-3 flex-shrink-0`}>
-              <ActiveTabSwitch compact={!isSidebarOpen && !isMobile} />
+            {/* Selector de pestañas */}
+            <div className="py-3 flex-shrink-0">
+              <ActiveTabSwitch compact={false} />
             </div>
 
-            {/* Lista de chats/contactos */}
-            <div className={`${!isSidebarOpen && !isMobile ? "hidden" : "flex-1"} overflow-y-auto p-3 min-h-0`}>
+            {/* Listas scrolleables */}
+            <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
               {activeTab === "chats" ? (
-                <ChatsList compact={!isSidebarOpen && !isMobile} />
+                <ChatsList compact={false} />
               ) : (
-                <ContactList compact={!isSidebarOpen && !isMobile} />
+                <ContactList compact={false} />
               )}
             </div>
-          </aside>
+          </div>
 
-          {/* Mobile backdrop - SOLO cuando sidebar está abierto en móvil */}
-          {isSidebarOpen && isMobile && (
-            <div
-              className="md:hidden fixed inset-0 bg-black/60 z-10"
-              onClick={() => setIsSidebarOpen(false)}
-              aria-hidden
-            />
-          )}
-
-          {/* ÁREA PRINCIPAL DEL CHAT */}
-          <main className="flex-1 flex flex-col bg-slate-900/50 backdrop-blur-sm min-h-0 h-full w-full overflow-hidden">
-            
-            {/* Botón para abrir sidebar en móvil - SOLO cuando está CERRADO y en móvil */}
-            {isMobile && !isSidebarOpen && (
-              <div className="md:hidden flex items-center p-3 border-b border-slate-700/50 flex-shrink-0">
-                <button
-                  onClick={toggleSidebar}
-                  className="p-2 rounded-md bg-slate-800/60 text-slate-200 hover:bg-slate-700/50"
-                  aria-label="Open menu"
-                >
-                  ☰
-                </button>
+          {/* ================= BURBUJA 2: CONTENEDOR DE LA CONVERSACIÓN ACTIVA ================= */}
+          <div
+            className={`w-full max-w-4xl h-[90vh] bg-slate-800/40 backdrop-blur-md rounded-2xl border border-slate-700/30 flex flex-col shadow-2xl transition-all duration-500 ease-in-out absolute overflow-hidden
+              ${selectedUser 
+                ? "translate-x-0 opacity-100 scale-100 z-20" 
+                : "translate-x-[120%] opacity-0 pointer-events-none scale-95 z-0"
+              }
+            `}
+          >
+            {selectedUser && (
+              <div className="w-full h-full flex flex-col relative">
+                {/* El contenedor real de tu chat */}
+                <div className="w-full h-full flex-1 min-h-0">
+                  <ChatContainer />
+                </div>
               </div>
             )}
+          </div>
 
-            {/* Botón sidebar desktop cuando está colapsado */}
-            {!isSidebarOpen && !isMobile && (
-              <div className="absolute top-3 left-3 z-10">
-                <button
-                  onClick={toggleSidebar}
-                  className="p-2 rounded-md bg-slate-800/70 text-slate-200 hover:bg-slate-700/50 backdrop-blur-sm"
-                  aria-label="Open sidebar"
-                >
-                  ☰
-                </button>
-              </div>
-            )}
-
-            {/* CONTENEDOR DEL CHAT */}
-            <div className="flex-1 min-h-0 w-full h-full">
-              {selectedUser ? <ChatContainer /> : <NoConversationPlaceholder />}
-            </div>
-          </main>
         </div>
-      </BorderAnimatedContainer>
     </div>
-  );
+  </div>
+);
 }
 
 export default ChatPage;
