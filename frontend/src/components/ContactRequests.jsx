@@ -13,7 +13,7 @@ export default function ContactRequests() {
   return (
     <div className="space-y-2">
       {requests.length === 0 ? (
-        <div className="p-4 text-slate-400">No hay solicitudes pendientes.</div>
+        <div className="p-4 text-slate-400">Todo tranquilo por acá...</div>
       ) : (
         requests.map((r) => <RequestItem key={r._id} request={r} />)
       )}

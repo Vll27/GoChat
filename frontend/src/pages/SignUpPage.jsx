@@ -93,7 +93,7 @@ function SignUpPage() {
     <div className="w-full flex items-center justify-center p-4 bg-black min-h-screen relative overflow-hidden group"
       onMouseMove={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
-        setMousePos = ({x: e.clientX - rect.left, y: e.clientY - rect.top})
+        setMousePos({x: e.clientX - rect.left, y: e.clientY - rect.top})
       }}>
         {/* Efecto de luz radia cyan */}
         <div
@@ -119,7 +119,7 @@ function SignUpPage() {
                 <form onSubmit={handleSubmit} className="space-y-8">
                   {/* NOMBRE COMPLETO */}
                   <div className="space-y-2">
-                    <label className="auth-input-label">Nombre completo</label>
+                    <label className="auth-input-label">Ingrese un usuario</label>
                     <div className="relative">
                       <UserIcon className="auth-input-icon" />
                       <input

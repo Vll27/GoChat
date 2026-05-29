@@ -318,7 +318,7 @@ function MessageInput() {
             }}
             onKeyPress={handleKeyPress}
             className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg py-3 px-4 text-slate-200 placeholder-slate-400 focus:outline-none focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 transition-all duration-200"
-            placeholder="Escribe un mensaje..."
+            placeholder="Escribí un mensaje..."
           />
         </div>
 

@@ -22,7 +22,7 @@ export default function SearchUsersModal({ isOpen, onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-slate-900 p-4 rounded w-11/12 max-w-md">
         <div className="flex gap-2 mb-4">
-          <input className="flex-1 p-2 rounded bg-slate-800" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input className="flex-1 p-2 rounded bg-slate-800" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar usuarios..." />
           <button onClick={search} className="px-3 py-2 bg-cyan-600 rounded">Buscar</button>
         </div>
 

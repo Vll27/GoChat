@@ -115,7 +115,7 @@ function ChatContainer() {
                     {msg.image && (
                       <img 
                         src={msg.image} 
-                        alt="Shared" 
+                        alt="Imagen enviada" 
                         className="rounded-lg mb-2 max-w-full h-auto object-cover max-h-64" 
                       />
                     )}

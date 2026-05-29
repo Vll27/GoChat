@@ -86,7 +86,7 @@ function ProfileHeader({ compact = false }) {
               <h3 className="text-slate-200 font-medium text-base truncate" title={authUser.fullName}>
                 {authUser.fullName}
               </h3>
-              <p className="text-slate-400 text-xs">Online</p>
+              <p className="text-slate-400 text-xs">Conectado</p>
             </div>
           )}
         </div>
@@ -130,7 +130,7 @@ function ProfileHeader({ compact = false }) {
                   className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm relative"
                 >
                   <Bell className="w-4 h-4" />
-                  <span>Solicitudes de contacto</span>
+                  <span>Mis solicitudes</span>
                   <div className="absolute right-3">
                     <NotificationBadge />
                   </div>
@@ -146,7 +146,7 @@ function ProfileHeader({ compact = false }) {
                   ) : (
                     <VolumeOffIcon className="w-4 h-4" />
                   )}
-                  <span>{isSoundEnabled ? "Silenciar sonido" : "Enable sound"}</span>
+                  <span>{isSoundEnabled ? "Silenciar notificaciones" : "Activar notificaciones"}</span>
                 </button>
 
                 {/* Logout */}
@@ -167,8 +167,8 @@ function ProfileHeader({ compact = false }) {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
             <div className="bg-slate-900 rounded p-4 w-11/12 max-w-md">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-slate-200 font-medium">Solicitudes de contacto</h4>
-                <button className="text-slate-400" onClick={() => setShowRequestsModal(false)}>Salir</button>
+                <h4 className="text-slate-200 font-medium">Mis solicitudes</h4>
+                <button className="text-slate-400" onClick={() => setShowRequestsModal(false)}>Cerrar</button>
               </div>
               <ContactRequests />
             </div>
