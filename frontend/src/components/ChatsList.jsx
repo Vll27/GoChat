@@ -5,16 +5,17 @@ import UsersLoadingSkeleton from "./UsersLoadingSkeleton";
 import NoChatsFound from "./NoChatsFound";
 
 function ChatsList({ compact = false }) {
-  const { 
-    getMyChatPartners, 
-    chats, 
-    isUsersLoading, 
+  const {
+    getMyChatPartners,
+    chats,
+    isUsersLoading,
     setSelectedUser,
     selectedUser,
     markMessagesAsRead,
     subscribeToMessages,
     unsubscribeFromMessages
   } = useChatStore();
+
   const { onlineUsers, socket } = useAuthStore();
 
   useEffect(() => {
@@ -26,12 +27,11 @@ function ChatsList({ compact = false }) {
   useEffect(() => {
     if (socket) {
       console.log(" ChatsList: Suscribiéndose a actualizaciones...");
-      
+
       const handleChatsUpdated = () => {
         console.log(" ChatsList: Actualizando lista de chats en tiempo real...");
         getMyChatPartners();
       };
-
       socket.on("chatsUpdated", handleChatsUpdated);
 
       return () => {
@@ -51,11 +51,11 @@ function ChatsList({ compact = false }) {
   // Función para formatear el último mensaje
   const formatLastMessage = (chat) => {
     if (!chat.lastMessage) return "No messages yet";
-    
+
     const lastMsg = chat.lastMessage;
     if (lastMsg.text) {
-      return lastMsg.text.length > 30 
-        ? lastMsg.text.substring(0, 30) + '...' 
+      return lastMsg.text.length > 30
+        ? lastMsg.text.substring(0, 30) + '...'
         : lastMsg.text;
     }
     if (lastMsg.image) return "📷 Image";
@@ -99,23 +99,25 @@ function ChatsList({ compact = false }) {
           } ${selectedUser?._id === chat.user?._id ? "bg-slate-700/50" : ""}`}
           title={compact ? getCompactTooltip(chat) : ""}
         >
+
           {/* Avatar con indicador online */}
           <div className="flex-shrink-0 relative">
             <div className={`${compact ? "w-12 h-12" : "w-12 h-12"} rounded-full bg-slate-600 flex items-center justify-center overflow-hidden`}>
-              <img 
-                src={chat.user?.profilePic || "/avatar.png"} 
-                alt={chat.user?.fullName} 
+              <img
+                src={chat.user?.profilePic || "/avatar.png"}
+                alt={chat.user?.fullName}
                 className="w-full h-full object-cover"
               />
             </div>
+
             {onlineUsers.includes(chat.user?._id) && (
               <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-800"></div>
             )}
-            
+
             {/* Badge de mensajes no leídos en modo compacto */}
             {compact && chat.unreadCount > 0 && (
               <div className="absolute -top-1 -right-1">
-                <span 
+                <span
                   className="text-white text-xs rounded-full w-5 h-5 flex items-center justify-center text-[10px]"
                   style={{ backgroundColor: "var(--theme-primary)" }}
                 >
@@ -138,14 +140,13 @@ function ChatsList({ compact = false }) {
                   </span>
                 )}
               </div>
-              
+
               <p className="text-sm text-slate-400 truncate">
                 {formatLastMessage(chat)}
               </p>
-              
               {chat.unreadCount > 0 && (
                 <div className="flex justify-end mt-1">
-                  <span 
+                  <span
                     className="text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
                     style={{ backgroundColor: "var(--theme-primary)" }}
                   >

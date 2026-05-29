@@ -27,9 +27,9 @@ function ContactList({ compact = false }) {
           {/* Avatar con indicador online */}
           <div className="flex-shrink-0 relative">
             <div className={`${compact ? "w-8 h-8" : "w-12 h-12"} rounded-full bg-slate-600 flex items-center justify-center overflow-hidden`}>
-              <img 
-                src={contact.profilePic || "/avatar.png"} 
-                alt={contact.fullName} 
+              <img
+                src={contact.profilePic || "/avatar.png"}
+                alt={contact.fullName}
                 className="w-full h-full object-cover"
               />
             </div>

@@ -1,10 +1,10 @@
 import { useState, useRef } from "react";
-import { 
-  LogOutIcon, 
-  VolumeOffIcon, 
-  Volume2Icon, 
-  Bell, 
-  UserPlus, 
+import {
+  LogOutIcon,
+  VolumeOffIcon,
+  Volume2Icon,
+  Bell,
+  UserPlus,
   MoreVerticalIcon
 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
@@ -22,10 +22,10 @@ function ProfileHeader({ compact = false }) {
   const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-
   const fileInputRef = useRef(null);
 
   const handleImageUpload = (e) => {
+
     const file = e.target.files[0];
     if (!file) return;
 
@@ -54,6 +54,7 @@ function ProfileHeader({ compact = false }) {
     <div className={`${compact ? "p-3" : "p-6"} relative`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1 min-w-0">
+
           {/* AVATAR */}
           <div className="avatar online flex-shrink-0">
             <button
@@ -108,10 +109,11 @@ function ProfileHeader({ compact = false }) {
         {showMenu && (
           <>
             {/* Backdrop */}
-            <div 
+            <div
               className="fixed inset-0 z-40"
               onClick={() => setShowMenu(false)}
             />
+
             {/* Menu */}
             <div className="absolute top-full right-0 mt-1 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50">
               <div className="p-2 space-y-1">
