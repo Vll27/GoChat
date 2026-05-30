@@ -3,7 +3,6 @@ import User from "../models/User.js";
 import { ENV } from "../lib/env.js";
 
 export const protectRoute = async (req, res, next) => {
-  // Verificar si la conexión ya se cerró
   if (req.socket.destroyed) {
     console.log("Connection already destroyed, skipping protectRoute");
     return;
@@ -16,7 +15,6 @@ export const protectRoute = async (req, res, next) => {
     console.log(" Token from cookies:", token ? "Present" : "Missing");
     
     if (!token) {
-      console.log(" No token provided");
       return res.status(401).json({ message: "Unauthorized - No token provided" });
     }
 
@@ -24,7 +22,6 @@ export const protectRoute = async (req, res, next) => {
     console.log(" Token decoded successfully, userId:", decoded.userId);
     
     if (!decoded) {
-      console.log(" Invalid token decoding");
       return res.status(401).json({ message: "Unauthorized - Invalid token" });
     }
 
@@ -32,8 +29,24 @@ export const protectRoute = async (req, res, next) => {
     console.log(" User found in DB:", user ? `Yes (${user.fullName})` : "No");
     
     if (!user) {
-      console.log(" User not found in database");
       return res.status(404).json({ message: "User not found" });
+    }
+
+    // 👈 ACTUALIZAR: cada request activo actualiza el lastSeen
+    // Solo actualizar si ha pasado más de 1 minuto (evitar muchas escrituras)
+    const oneMinuteAgo = new Date(Date.now() - 60000);
+    if (!user.lastSeen || user.lastSeen < oneMinuteAgo) {
+      user.lastSeen = new Date();
+      user.lastSeenStatus = "online";
+      await user.save();
+      
+      // Notificar cambio de estado
+      const { io } = await import("../lib/socket.js");
+      io.emit("userStatusChanged", {
+        userId: user._id,
+        status: "online",
+        lastSeen: user.lastSeen
+      });
     }
 
     req.user = user;
@@ -42,13 +55,11 @@ export const protectRoute = async (req, res, next) => {
   } catch (error) {
     console.log(" Error in protectRoute middleware:", error.message);
     
-    // Verificar si la respuesta ya fue enviada o la conexión se cerró
     if (res.headersSent || req.socket.destroyed) {
       console.log("Response already sent or connection destroyed, skipping error response");
       return;
     }
     
-    // Manejo específico para ECONNRESET
     if (error.code === 'ECONNRESET' || error.message.includes('ECONNRESET')) {
       console.log("Connection reset in protectRoute");
       return;

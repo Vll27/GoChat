@@ -22,7 +22,6 @@ export const useAuthStore = create((set, get) => ({
       console.log("Error in authCheck:", error.message);
       set({ authUser: null });
       
-      // NO mostrar error para 401 (Unauthorized) - es normal cuando no hay sesión
       if (error.response?.status !== 401 && !error.message?.includes('timeout')) {
         toast.error("Authentication check failed");
       }
@@ -101,18 +100,118 @@ export const useAuthStore = create((set, get) => ({
 
       set({ socket });
 
-      // listen for online users event
       socket.on("getOnlineUsers", (userIds) => {
         set({ onlineUsers: userIds });
+        console.log("🟢 Usuarios online actualizados:", userIds);
+      });
+      
+      // Evento para cuando un usuario se desconecta
+      socket.on("userOffline", ({ userId, lastSeen }) => {
+        console.log(`🔴 Usuario OFFLINE detectado: ${userId} a las ${new Date(lastSeen).toLocaleTimeString()}`);
+        
+        // Remover de onlineUsers inmediatamente
+        set({ onlineUsers: get().onlineUsers.filter(id => id !== userId) });
+        
+        // Actualizar chatStore inmediatamente
+        try {
+          const { useChatStore } = require("./useChatStore");
+          
+          // Actualizar el estado del usuario en chats
+          const currentChats = useChatStore.getState().chats;
+          const updatedChats = currentChats.map(chat => {
+            if (chat.user?._id === userId) {
+              return {
+                ...chat,
+                user: {
+                  ...chat.user,
+                  lastSeenStatus: "offline",
+                  lastSeen: lastSeen
+                }
+              };
+            }
+            return chat;
+          });
+          
+          useChatStore.setState({ chats: updatedChats });
+          
+          // Actualizar selectedUser si es necesario
+          const selectedUser = useChatStore.getState().selectedUser;
+          if (selectedUser?._id === userId) {
+            useChatStore.setState({
+              selectedUser: {
+                ...selectedUser,
+                lastSeenStatus: "offline",
+                lastSeen: lastSeen
+              }
+            });
+          }
+          
+          // Forzar recarga
+          if (useChatStore.getState().forceRefreshChats) {
+            useChatStore.getState().forceRefreshChats();
+          }
+        } catch (e) {
+          console.log("Error:", e.message);
+        }
+      });
+      
+      socket.on("userStatusChanged", ({ userId, status, lastSeen }) => {
+        console.log(`🔄 AuthStore: Usuario ${userId} cambió a estado: ${status}`);
+        
+        if (status === "online") {
+          set({ onlineUsers: [...new Set([...get().onlineUsers, userId])] });
+        } else {
+          set({ onlineUsers: get().onlineUsers.filter(id => id !== userId) });
+        }
+        
+        try {
+          const { useChatStore } = require("./useChatStore");
+          const currentChats = useChatStore.getState().chats;
+          
+          const updatedChats = currentChats.map(chat => {
+            if (chat.user?._id === userId) {
+              return {
+                ...chat,
+                user: {
+                  ...chat.user,
+                  lastSeenStatus: status,
+                  lastSeen: lastSeen
+                }
+              };
+            }
+            return chat;
+          });
+          
+          useChatStore.setState({ chats: updatedChats });
+          
+          const selectedUser = useChatStore.getState().selectedUser;
+          if (selectedUser?._id === userId) {
+            useChatStore.setState({
+              selectedUser: {
+                ...selectedUser,
+                lastSeenStatus: status,
+                lastSeen: lastSeen
+              }
+            });
+          }
+          
+          if (useChatStore.getState().forceRefreshChats) {
+            setTimeout(() => {
+              useChatStore.getState().forceRefreshChats();
+            }, 50);
+          }
+        } catch (e) {
+          console.log("Error:", e.message);
+        }
       });
 
-      // initialize contact store socket listeners (if present)
       try {
         const { useContactStore } = await import("./useContactStore");
-        // ensure subscription
-        useContactStore.getState().subscribeToSocket();
+        const contactStore = useContactStore.getState();
+        if (contactStore.subscribeToSocket) {
+          contactStore.subscribeToSocket();
+        }
       } catch (e) {
-        // ignore if contact store not present or fails
         console.log("Contact store not available:", e.message);
       }
     } catch (error) {
@@ -121,6 +220,11 @@ export const useAuthStore = create((set, get) => ({
   },
 
   disconnectSocket: () => {
-    if (get().socket?.connected) get().socket.disconnect();
+    const { socket } = get();
+    if (socket?.connected) {
+      socket.disconnect();
+      set({ socket: null, onlineUsers: [] });
+      console.log("🔌 Socket desconectado");
+    }
   },
 }));

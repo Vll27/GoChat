@@ -15,6 +15,7 @@ export const useChatStore = create((set, get) => ({
   isWindowFocused: true,
   messageInputText: "",
   setMessageInputText: (text) => set({ messageInputText: text }),
+  refreshInterval: null,
 
   toggleSound: () => {
     const newValue = !get().isSoundEnabled;
@@ -45,11 +46,32 @@ export const useChatStore = create((set, get) => ({
     try {
       const res = await axiosInstance.get("/messages/chats");
       set({ chats: res.data });
+      console.log("📊 Chats actualizados con lastSeen:", res.data.map(c => ({
+        nombre: c.user?.fullName,
+        lastSeen: c.user?.lastSeen,
+        status: c.user?.lastSeenStatus
+      })));
+      
+      // 👈 FORZAR ACTUALIZACIÓN DEL SELECTED USER
+      const { selectedUser } = get();
+      if (selectedUser) {
+        const updatedUser = res.data.find(c => c.user._id === selectedUser._id)?.user;
+        if (updatedUser && updatedUser.lastSeenStatus !== selectedUser.lastSeenStatus) {
+          console.log(`🔄 Forzando actualización de selectedUser: ${updatedUser.fullName} -> ${updatedUser.lastSeenStatus}`);
+          set({ selectedUser: updatedUser });
+        }
+      }
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(error.response?.data?.message || "Error al cargar chats");
     } finally {
       set({ isUsersLoading: false });
     }
+  },
+
+  // 👈 NUEVA FUNCIÓN: Forzar actualización inmediata
+  forceRefreshChats: async () => {
+    console.log("🔄 Forzando actualización inmediata de chats...");
+    await get().getMyChatPartners();
   },
 
   getMessagesByUserId: async (userId) => {
@@ -112,45 +134,24 @@ export const useChatStore = create((set, get) => ({
   playNotificationSound: () => {
     const { isSoundEnabled, isWindowFocused } = get();
     
-    console.log(" Verificando condiciones para sonido:", { 
-      isSoundEnabled, 
-      isWindowFocused,
-      shouldPlay: !isWindowFocused && isSoundEnabled
-    });
-    
-    if (!isSoundEnabled) {
-      console.log(" Sonido no reproducido: Sonidos desactivados en configuración");
-      return;
-    }
-    
-    if (isWindowFocused) {
-      console.log(" Sonido no reproducido: Ventana está en foco");
-      return;
-    }
+    if (!isSoundEnabled) return;
+    if (isWindowFocused) return;
 
     try {
       const notificationSound = new Audio("/sounds/notification.mp3");
       notificationSound.currentTime = 0;
       notificationSound.volume = 0.6;
       
-      console.log("🎵 Reproduciendo sonido de notificación...");
-      
       const playPromise = notificationSound.play();
       if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            console.log(" Sonido reproducido exitosamente");
-          })
-          .catch(error => {
-            console.log(" Error al reproducir sonido:", error);
-          });
+        playPromise.catch(error => console.log("Error al reproducir sonido:", error));
       }
     } catch (error) {
-      console.log(" Error al cargar el sonido:", error);
+      console.log("Error al cargar el sonido:", error);
     }
   },
 
-  sendMessage: async (messageData) => {
+  sendMessage: async (messageData, payloadForServer) => {
     const { selectedUser, messages, updateChatLastMessage } = get();
     const { authUser } = useAuthStore.getState();
 
@@ -175,7 +176,8 @@ export const useChatStore = create((set, get) => ({
     updateChatLastMessage(optimisticMessage, true);
 
     try {
-      const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
+      // Si payloadForServer es FormData, dejar que axios establezca los headers
+      const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, payloadForServer ?? messageData);
       
       const finalMessages = messages.filter(msg => msg._id !== tempId).concat(res.data);
       set({ messages: finalMessages });
@@ -184,7 +186,7 @@ export const useChatStore = create((set, get) => ({
     } catch (error) {
       const originalMessages = messages.filter(msg => msg._id !== tempId);
       set({ messages: originalMessages });
-      get().getMyChatPartners();
+      get().forceRefreshChats();
       toast.error(error.response?.data?.message || "Algo salió mal");
     }
   },
@@ -196,104 +198,98 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // Suscripción a mensajes en tiempo real
   subscribeToMessages: () => {
-    const { selectedUser, updateChatLastMessage, markMessagesAsRead, playNotificationSound, getMyChatPartners } = get();
+    const { selectedUser, updateChatLastMessage, markMessagesAsRead, playNotificationSound, forceRefreshChats } = get();
     const socket = useAuthStore.getState().socket;
 
-    if (!socket) {
-      console.log(" No hay socket disponible para suscribirse a mensajes");
-      return;
-    }
+    if (!socket) return;
 
-    console.log(" Suscribiéndose a mensajes en tiempo real...");
+    console.log("🔔 Suscribiéndose a mensajes en tiempo real...");
 
-    // Limpiar listeners anteriores
     socket.off("newMessage");
     socket.off("messageNotification");
     socket.off("chatsUpdated");
+    socket.off("userStatusChanged");
 
-    //  Listener para nuevos mensajes (actualización de UI)
     socket.on("newMessage", (newMessage) => {
       const { authUser } = useAuthStore.getState();
       const isMessageFromSelectedUser = selectedUser?._id === newMessage.senderId;
-      const isMessageFromMe = newMessage.senderId === authUser._id;
       
-      console.log(" Nuevo mensaje recibido en tiempo real:", {
-        from: newMessage.senderId,
-        to: newMessage.receiverId,
-        isFromMe: isMessageFromMe,
-        isFromSelectedUser: isMessageFromSelectedUser,
-        selectedUser: selectedUser?._id,
-        text: newMessage.text
-      });
-      
-      //  SIEMPRE actualizar la lista de chats
       updateChatLastMessage(newMessage, false);
 
-      //  Si el mensaje es del usuario seleccionado, agregarlo al chat actual
       if (isMessageFromSelectedUser) {
         const currentMessages = get().messages;
-        
-        // Evitar duplicados
         const messageExists = currentMessages.some(msg => msg._id === newMessage._id);
         if (!messageExists) {
-          console.log(" Agregando mensaje al chat actual:", newMessage.text);
           set({ messages: [...currentMessages, newMessage] });
           markMessagesAsRead(selectedUser._id);
-        } else {
-          console.log(" Mensaje duplicado, ignorando...");
         }
-      } else {
-        console.log("ℹ Mensaje de otro chat, solo actualizando lista");
       }
     });
 
-    // Listener para notificaciones de sonido
     socket.on("messageNotification", (notificationData) => {
       const { authUser } = useAuthStore.getState();
       const { message, senderName } = notificationData;
       const isMessageFromMe = message.senderId === authUser._id;
       
-      console.log(" Notificación de mensaje recibida:", {
-        from: senderName,
-        isFromMe: isMessageFromMe,
-        selectedUser: selectedUser?._id,
-        messageFrom: message.senderId
-      });
-      
-      const shouldPlaySound = !isMessageFromMe;
-      
-      console.log(" Condición de sonido:", {
-        isFromMe: isMessageFromMe,
-        shouldPlaySound
-      });
-      
-      if (shouldPlaySound) {
-        console.log(" Condición CUMPLIDA - Reproduciendo sonido");
+      if (!isMessageFromMe) {
         playNotificationSound();
         
         if ("Notification" in window && Notification.permission === "granted") {
           try {
             new Notification(`Nuevo mensaje de ${senderName}`, {
-              body: message.text || " Imagen",
+              body: message.text || "📷 Imagen",
               icon: "/avatar.png",
               tag: "gochat-message",
               silent: true
             });
           } catch (error) {
-            console.log(" Error al mostrar notificación:", error);
+            console.log("Error al mostrar notificación:", error);
           }
         }
-      } else {
-        console.log(" Sonido no reproducido: Es mensaje propio");
       }
     });
 
-    // Listener para actualizaciones de la lista de chats
     socket.on("chatsUpdated", () => {
-      console.log(" chatsUpdated recibido - Actualizando lista de chats...");
-      getMyChatPartners();
+      console.log("🔄 chatsUpdated recibido - Recargando lista de chats...");
+      forceRefreshChats();
+    });
+
+    socket.on("userStatusChanged", ({ userId, status, lastSeen }) => {
+      console.log(`📱 ChatStore recibió cambio de estado: ${userId} -> ${status}`);
+      
+      const { chats, selectedUser } = get();
+      
+      const updatedChats = chats.map(chat => {
+        if (chat.user._id === userId) {
+          return {
+            ...chat,
+            user: {
+              ...chat.user,
+              lastSeenStatus: status,
+              lastSeen: lastSeen
+            }
+          };
+        }
+        return chat;
+      });
+      
+      set({ chats: updatedChats });
+      
+      if (selectedUser?._id === userId) {
+        set({
+          selectedUser: {
+            ...selectedUser,
+            lastSeenStatus: status,
+            lastSeen: lastSeen
+          }
+        });
+      }
+      
+      // 👈 FORZAR RECARGA COMPLETA PARA ASEGURAR
+      setTimeout(() => {
+        forceRefreshChats();
+      }, 500);
     });
   },
 
@@ -304,6 +300,7 @@ export const useChatStore = create((set, get) => ({
       socket.off("newMessage");
       socket.off("messageNotification");
       socket.off("chatsUpdated");
+      socket.off("userStatusChanged");
     }
   },
 }));
