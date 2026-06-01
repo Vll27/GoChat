@@ -6,8 +6,7 @@ import { ImageIcon, SendIcon, XIcon, SmileIcon, SearchIcon } from "lucide-react"
 
 function MessageInput() {
   const { playRandomKeyStrokeSound } = useKeyboardSound();
-  const [text, setText] = useState("");
-  const { messageInputText, setMessageInputText } = useChatStore();;
+  const { messageInputText, setMessageInputText } = useChatStore();
   const [imagePreview, setImagePreview] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -131,33 +130,36 @@ function MessageInput() {
     : emojiCategories[activeCategory].emojis;
 
   const handleSendMessage = (e) => {
-    e.preventDefault();
-    
-    if (!messageInputText.trim() && !imagePreview) return;
-    if (isSoundEnabled) playRandomKeyStrokeSound();
-
-    // Preparar payload para servidor: FormData si hay archivo, JSON si no
-    const file = fileInputRef.current?.files?.[0];
-    let payloadForServer;
-    if (file) {
-      const fd = new FormData();
-      if (text.trim()) fd.append("text", text.trim());
-      fd.append("image", file);
-      payloadForServer = fd;
-    } else {
-      payloadForServer = { text: text.trim(), image: imagePreview };
-    }
-
-    sendMessage({
-      text: messageInputText.trim(), 
-      image: imagePreview,
-    }, payloadForServer);
+  e.preventDefault();
   
-    setMessageInputText("");
-    setImagePreview("");
-    setShowEmojiPicker(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
+  // Guardamos el texto limpio de Zustand
+  const trimmedText = messageInputText.trim();
+  
+  if (!trimmedText && !imagePreview) return;
+  if (isSoundEnabled) playRandomKeyStrokeSound();
+
+  // Preparar payload usando trimmedText
+  const file = fileInputRef.current?.files?.[0];
+  let payloadForServer;
+  if (file) {
+    const fd = new FormData();
+    if (trimmedText) fd.append("text", trimmedText);
+    fd.append("image", file);
+    payloadForServer = fd;
+  } else {
+    payloadForServer = { text: trimmedText, image: imagePreview };
+  }
+
+  sendMessage({
+    text: trimmedText, 
+    image: imagePreview,
+  }, payloadForServer);
+
+  setMessageInputText("");
+  setImagePreview("");
+  setShowEmojiPicker(false);
+  if (fileInputRef.current) fileInputRef.current.value = "";
+};
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -177,10 +179,11 @@ function MessageInput() {
   };
 
   const handleEmojiClick = (emoji) => {
-    setText(prev => prev + emoji);
-    setTimeout(() => {
-      textInputRef.current?.focus();
-    }, 0);
+  // 💥 Cambiado para actualizar Zustand
+  setMessageInputText(messageInputText + emoji);
+  setTimeout(() => {
+    textInputRef.current?.focus();
+  }, 0);
   };
 
   const handleKeyPress = (e) => {

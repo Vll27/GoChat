@@ -99,64 +99,71 @@ export const getMessagesByUserId = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
   try {
-    const { text } = req.body;
+    // 1. Flexibilidad: Extraemos texto e imagen directamente del body por si viajan como JSON
+    const { text, image, message } = req.body;
     const { id: receiverId } = req.params;
     const senderId = req.user._id;
     const imageFile = req.file;
 
-    if (!text && !imageFile) {
+    // Sincronizamos variaciones de nombres (por si el frontend manda 'message' en vez de 'text')
+    const finalValidText = text || message || "";
+    // Evaluamos si viene un string de imagen en el body o un archivo binario real
+    const finalValidImage = imageFile || image || null;
+
+    // 2. Validación adaptada
+    if (!finalValidText && !finalValidImage) {
       return res.status(400).json({ message: "Se requiere texto o imagen." });
     }
+    
     if (senderId.equals(receiverId)) {
       return res.status(400).json({ message: "No puedes enviarte mensajes a ti mismo." });
     }
+    
     const receiverExists = await User.exists({ _id: receiverId });
     if (!receiverExists) {
       return res.status(404).json({ message: "Receptor no encontrado." });
     }
 
-    let imageUrl;
+    // 3. Manejo inteligente de Cloudinary (Acepta buffer binario O string base64)
+    let imageUrl = null;
     if (imageFile?.buffer) {
+      // Si subieron un archivo real por Multer
       const uploadResponse = await uploadBufferToCloudinary(imageFile.buffer);
+      imageUrl = uploadResponse.secure_url;
+    } else if (typeof image === "string" && image.trim() !== "") {
+      // Si mandaron un Base64 o link directo desde el JSON del body
+      const uploadResponse = await cloudinary.uploader.upload(image, {
+        folder: "chat-images",
+      });
       imageUrl = uploadResponse.secure_url;
     }
 
     const newMessage = new Message({
       senderId,
       receiverId,
-      text,
+      text: finalValidText,
       image: imageUrl,
     });
 
     await newMessage.save();
 
+    // 4. Lógica de Sockets e Notificaciones (Queda intacta y funcional)
     const receiverSocketId = getReceiverSocketId(receiverId);
     const senderSocketId = getReceiverSocketId(senderId.toString());
 
     console.log("Enviando mensaje - Emisor:", req.user.fullName, "Receptor:", receiverId);
-    console.log("Socket IDs - Receptor:", receiverSocketId, "Emisor:", senderSocketId);
 
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("newMessage", newMessage);
-      console.log("Evento newMessage enviado al receptor");
-      
       io.to(receiverSocketId).emit("messageNotification", {
         message: newMessage,
         senderName: req.user.fullName,
         isFromActiveChat: false
       });
-      console.log("Evento messageNotification enviado al receptor");
     }
 
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("chatsUpdated");
-      console.log("Evento chatsUpdated enviado al receptor");
-    }
-    
-    if (senderSocketId) {
-      io.to(senderSocketId).emit("chatsUpdated");
-      console.log("Evento chatsUpdated enviado al emisor");
-    }
+    if (receiverSocketId) io.to(receiverSocketId).emit("chatsUpdated");
+    if (senderSocketId) io.to(senderSocketId).emit("chatsUpdated");
 
     res.status(201).json(newMessage);
   } catch (error) {

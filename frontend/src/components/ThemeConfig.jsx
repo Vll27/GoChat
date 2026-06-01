@@ -39,7 +39,7 @@ function ThemeConfig() {
 
         <div className="mt-12 flex flex-col gap-5 overflow-y-auto pr-1 custom-scrollbar flex-1">
           <div className="text-center">
-            <h2 className="text-base font-semibold text-slate-100">¡Personalizá ya tu experiencia!</h2>
+            <h2 className="text-base font-semibold text-slate-100">Elegí cualquier color para las burbujas de chat.</h2>
           </div>
 
           {/* Color Remitente */}

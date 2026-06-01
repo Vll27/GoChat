@@ -44,9 +44,9 @@ function WallpaperConfig() {
         </button>
 
         <div className="mt-12 flex flex-col items-center text-center gap-4">
-          <h2 className="text-lg font-semibold text-slate-100">Personalizar Fondo</h2>
+          <h2 className="text-lg font-semibold text-slate-100">Fondo de pantalla del chat</h2>
           <p className="text-xs text-slate-400 max-w-xs">
-            Suba una imagen desde su dispositivo para cambiar el fondo por defecto.
+            Subí una imagen desde tu dispositivo para cambiarla. Esta imagen se usará en todos tus chats.
           </p>
 
           <input

@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { useConfigStore } from "../store/useConfigStore";
+import { useNavigate } from "react-router";
+// Importamos un icono de flecha/salida para que se vea más profesional (opcional)
+import { LogOut } from "lucide-react"; 
 import BorderAnimatedContainer from "../components/BorderAnimatedContainer";
 import WallpaperConfig from "../components/WallpaperConfig";
 import ThemeConfig from "../components/ThemeConfig";
@@ -8,6 +11,7 @@ import AppColor from "../components/AppColor.jsx";
 function ConfigPage() {
   const { activeConfigTab, setActiveConfigTab, isSubConfigOpen, setIsSubConfigOpen } = useConfigStore();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -63,7 +67,7 @@ function ConfigPage() {
                   `}
                 >
                   <span className="text-xl">🎨</span>
-                  <span>Colores del tema</span>
+                  <span>Colores de la burbuja de chat</span>
                 </button>
 
                 {/* Opc 3: Fuentes de texto */}
@@ -80,18 +84,30 @@ function ConfigPage() {
                   <span>Fuentes de texto</span>
                 </button>
 
-                { /* Opc 4: Color de la aplicación */}
+                { /* Opc 4: Diseño de la interfaz */}
                 <button
                   onClick={() => { setActiveConfigTab("appColor"); setIsSubConfigOpen(true);}}
-                  className={`w-full p-4 rounded-xl flex items-center gap-4 text-sm font-medium transition-all duration-200 border text-left}
+                  className={`w-full p-4 rounded-xl flex items-center gap-4 text-sm font-medium transition-all duration-200 border text-left
                     ${activeConfigTab === "appColor" ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30 shadow-lg shadow-cyan-500/5" : "bg-slate-900/40 text-slate-300 border-slate-800 hover:bg-slate-800/50 hover:text-white"}
                   `}
                 >
                   <span className="text-xl">💻</span>
-                  <span>Color de la aplicación</span>
+                  <span>Diseño de la interfaz</span>
                 </button>
 
               </div>
+
+              {/* ================= BOTÓN: VOLVER A TUS CHATS ================= */}
+              <div className="mt-4 pt-4 border-t border-slate-700/50">
+                <button
+                  onClick={() => { navigate("/"); }} // Navegar a la pestaña de chats.
+                  className="w-full p-3.5 rounded-xl flex items-center justify-center gap-3 text-sm font-semibold transition-all duration-200 bg-gradient-to-r from-rose-500/10 to-rose-600/10 text-rose-400 border border-rose-500/20 hover:from-rose-500/20 hover:to-rose-600/20 hover:text-rose-300 shadow-lg shadow-rose-900/5 active:scale-[0.98]"
+                >
+                  <LogOut className="w-4 h-4 rotate-180" /> {/* Icono de salida invertido como "volver" */}
+                  <span>Volver a tus chats</span>
+                </button>
+              </div>
+
             </div>
 
             {/* ================= BURBUJA 2: OPCIONES DETALLADAS DE PESTAÑA (DERECHA) ================= */}
