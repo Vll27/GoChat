@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useConfigStore } from "../store/useConfigStore";
 import { useNavigate } from "react-router";
 // Importamos un icono de flecha/salida para que se vea más profesional (opcional)
-import { LogOut } from "lucide-react"; 
+import { LogOut, Image, Palette, Type, Layout } from "lucide-react"; 
 import BorderAnimatedContainer from "../components/BorderAnimatedContainer";
 import WallpaperConfig from "../components/WallpaperConfig";
 import ThemeConfig from "../components/ThemeConfig";
@@ -40,62 +40,65 @@ function ConfigPage() {
               </h1>
 
               {/* Lista de Pestañas */}
-              <div className="flex flex-col gap-3 flex-1 overflow-y-auto pr-1 custom-scrollbar">
-                
-                {/* Opc 1: Fondo de Pantalla */}
-                <button
-                  onClick={() => { setActiveConfigTab("fondo"); setIsSubConfigOpen(true); }}
-                  className={`w-full p-4 rounded-xl flex items-center gap-4 text-sm font-medium transition-all duration-200 border text-left
-                    ${activeConfigTab === "fondo"
-                      ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30 shadow-lg shadow-cyan-500/5"
-                      : "bg-slate-900/40 text-slate-300 border-slate-800 hover:bg-slate-800/50 hover:text-white"
-                    }
-                  `}
-                >
-                  <span className="text-xl">🖼️</span>
-                  <span>Fondo de pantalla</span>
-                </button>
+<div className="flex flex-col gap-3 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+  
+  {/* Opc 1: Fondo de Pantalla */}
+  <button
+    onClick={() => { setActiveConfigTab("fondo"); setIsSubConfigOpen(true); }}
+    className={`w-full p-4 rounded-xl flex items-center gap-4 text-sm font-medium transition-all duration-200 border text-left
+      ${activeConfigTab === "fondo"
+        ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30 shadow-lg shadow-cyan-500/5"
+        : "bg-slate-900/40 text-slate-300 border-slate-800 hover:bg-slate-800/50 hover:text-white"
+      }
+    `}
+  >
+    <Image className="w-5 h-5 flex-shrink-0" />
+    <span>Fondo de pantalla</span>
+  </button>
 
-                {/* Opc 2: Colores del tema */}
-                <button
-                  onClick={() => { setActiveConfigTab("colores"); setIsSubConfigOpen(true); }}
-                  className={`w-full p-4 rounded-xl flex items-center gap-4 text-sm font-medium transition-all duration-200 border text-left
-                    ${activeConfigTab === "colores"
-                      ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30 shadow-lg shadow-cyan-500/5"
-                      : "bg-slate-900/40 text-slate-300 border-slate-800 hover:bg-slate-800/50 hover:text-white"
-                    }
-                  `}
-                >
-                  <span className="text-xl">🎨</span>
-                  <span>Colores de la burbuja de chat</span>
-                </button>
+  {/* Opc 2: Colores del tema */}
+  <button
+    onClick={() => { setActiveConfigTab("colores"); setIsSubConfigOpen(true); }}
+    className={`w-full p-4 rounded-xl flex items-center gap-4 text-sm font-medium transition-all duration-200 border text-left
+      ${activeConfigTab === "colores"
+        ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30 shadow-lg shadow-cyan-500/5"
+        : "bg-slate-900/40 text-slate-300 border-slate-800 hover:bg-slate-800/50 hover:text-white"
+      }
+    `}
+  >
+    <Palette className="w-5 h-5 flex-shrink-0" />
+    <span>Colores de la burbuja de chat</span>
+  </button>
 
-                {/* Opc 3: Fuentes de texto */}
-                <button
-                  onClick={() => { setActiveConfigTab("fuentes"); setIsSubConfigOpen(true); }}
-                  className={`w-full p-4 rounded-xl flex items-center gap-4 text-sm font-medium transition-all duration-200 border text-left
-                    ${activeConfigTab === "fuentes"
-                      ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30 shadow-lg shadow-cyan-500/5"
-                      : "bg-slate-900/40 text-slate-300 border-slate-800 hover:bg-slate-800/50 hover:text-white"
-                    }
-                  `}
-                >
-                  <span className="text-xl">🔤</span>
-                  <span>Fuentes de texto</span>
-                </button>
+  {/* Opc 3: Fuentes de texto */}
+  <button
+    onClick={() => { setActiveConfigTab("fuentes"); setIsSubConfigOpen(true); }}
+    className={`w-full p-4 rounded-xl flex items-center gap-4 text-sm font-medium transition-all duration-200 border text-left
+      ${activeConfigTab === "fuentes"
+        ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30 shadow-lg shadow-cyan-500/5"
+        : "bg-slate-900/40 text-slate-300 border-slate-800 hover:bg-slate-800/50 hover:text-white"
+      }
+    `}
+  >
+    <Type className="w-5 h-5 flex-shrink-0" />
+    <span>Fuentes de texto</span>
+  </button>
 
-                { /* Opc 4: Diseño de la interfaz */}
-                <button
-                  onClick={() => { setActiveConfigTab("appColor"); setIsSubConfigOpen(true);}}
-                  className={`w-full p-4 rounded-xl flex items-center gap-4 text-sm font-medium transition-all duration-200 border text-left
-                    ${activeConfigTab === "appColor" ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30 shadow-lg shadow-cyan-500/5" : "bg-slate-900/40 text-slate-300 border-slate-800 hover:bg-slate-800/50 hover:text-white"}
-                  `}
-                >
-                  <span className="text-xl">💻</span>
-                  <span>Diseño de la interfaz</span>
-                </button>
+  { /* Opc 4: Diseño de la interfaz */}
+  <button
+    onClick={() => { setActiveConfigTab("appColor"); setIsSubConfigOpen(true);}}
+    className={`w-full p-4 rounded-xl flex items-center gap-4 text-sm font-medium transition-all duration-200 border text-left
+      ${activeConfigTab === "appColor" 
+        ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30 shadow-lg shadow-cyan-500/5" 
+        : "bg-slate-900/40 text-slate-300 border-slate-800 hover:bg-slate-800/50 hover:text-white"
+      }
+    `}
+  >
+    <Layout className="w-5 h-5 flex-shrink-0" />
+    <span>Diseño de la interfaz</span>
+  </button>
 
-              </div>
+</div>
 
               {/* ================= BOTÓN: VOLVER A TUS CHATS ================= */}
               <div className="mt-4 pt-4 border-t border-slate-700/50">

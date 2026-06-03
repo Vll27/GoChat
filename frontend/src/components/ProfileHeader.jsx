@@ -5,10 +5,12 @@ import {
   Volume2Icon,
   Bell,
   UserPlus,
-  MoreVerticalIcon
+  MoreVerticalIcon,
+  Settings
 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
+import { useNavigate } from "react-router";
 import NotificationBadge from "./NotificationBadge";
 import ContactRequests from "./ContactRequests";
 import SearchUsersModal from "./SearchUsersModal";
@@ -22,6 +24,7 @@ function ProfileHeader({ compact = false }) {
   const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
   const handleImageUpload = (e) => {
@@ -115,52 +118,61 @@ function ProfileHeader({ compact = false }) {
             />
 
             {/* Menu */}
-            <div className="absolute top-full right-0 mt-1 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50">
-              <div className="p-2 space-y-1">
-                {/* Find users */}
-                <button
-                  onClick={() => handleMenuAction(() => setShowSearchModal(true))}
-                  className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>Agregar</span>
-                </button>
+<div className="absolute top-full right-0 mt-1 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50">
+  <div className="p-2 space-y-1">
+    {/* Find users */}
+    <button
+      onClick={() => handleMenuAction(() => setShowSearchModal(true))}
+      className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm"
+    >
+      <UserPlus className="w-4 h-4" />
+      <span>Agregar</span>
+    </button>
 
-                {/* Contact requests */}
-                <button
-                  onClick={() => handleMenuAction(() => setShowRequestsModal(true))}
-                  className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm relative"
-                >
-                  <Bell className="w-4 h-4" />
-                  <span>Mis solicitudes</span>
-                  <div className="absolute right-3">
-                    <NotificationBadge />
-                  </div>
-                </button>
+    {/* Contact requests */}
+    <button
+      onClick={() => handleMenuAction(() => setShowRequestsModal(true))}
+      className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm relative"
+    >
+      <Bell className="w-4 h-4" />
+      <span>Mis solicitudes</span>
+      <div className="absolute right-3">
+        <NotificationBadge />
+      </div>
+    </button>
 
-                {/* Sound toggle */}
-                <button
-                  onClick={() => handleMenuAction(handleToggleSound)}
-                  className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm"
-                >
-                  {isSoundEnabled ? (
-                    <Volume2Icon className="w-4 h-4" />
-                  ) : (
-                    <VolumeOffIcon className="w-4 h-4" />
-                  )}
-                  <span>{isSoundEnabled ? "Silenciar notificaciones" : "Activar notificaciones"}</span>
-                </button>
+    {/* Sound toggle */}
+    <button
+      onClick={() => handleMenuAction(handleToggleSound)}
+      className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm"
+    >
+      {isSoundEnabled ? (
+        <Volume2Icon className="w-4 h-4" />
+      ) : (
+        <VolumeOffIcon className="w-4 h-4" />
+      )}
+      <span>{isSoundEnabled ? "Silenciar notificaciones" : "Activar notificaciones"}</span>
+    </button>
 
-                {/* Logout */}
-                <button
-                  onClick={() => handleMenuAction(logout)}
-                  className="w-full flex items-center gap-3 px-3 py-3 text-red-400 hover:bg-slate-700 rounded-md transition-colors text-sm"
-                >
-                  <LogOutIcon className="w-4 h-4" />
-                  <span>Cerrar sesión</span>
-                </button>
-              </div>
-            </div>
+    {/* ================= OPCIÓN: CONFIGURACIÓN ================= */}
+    <button
+      onClick={() => handleMenuAction(() => navigate("/config"))}
+      className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm"
+    >
+      <Settings className="w-4 h-4" />
+      <span>Configuración</span>
+    </button>
+
+    {/* Logout */}
+    <button
+      onClick={() => handleMenuAction(logout)}
+      className="w-full flex items-center gap-3 px-3 py-3 text-red-400 hover:bg-slate-700 rounded-md transition-colors text-sm"
+    >
+      <LogOutIcon className="w-4 h-4" />
+      <span>Cerrar sesión</span>
+    </button>
+  </div>
+</div>
           </>
         )}
 
