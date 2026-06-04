@@ -5,8 +5,8 @@ import {
   Volume2Icon,
   Bell,
   UserPlus,
-  MoreVerticalIcon,
-  Settings
+  Settings,
+  Camera
 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
@@ -28,7 +28,6 @@ function ProfileHeader({ compact = false }) {
   const fileInputRef = useRef(null);
 
   const handleImageUpload = (e) => {
-
     const file = e.target.files[0];
     if (!file) return;
 
@@ -54,135 +53,147 @@ function ProfileHeader({ compact = false }) {
   };
 
   return (
-    <div className={`${compact ? "p-3" : "p-6"} relative`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-
-          {/* AVATAR */}
+    <div className={`${compact ? "p-1" : "p-2"} relative w-full`}>
+      <div className="flex items-center justify-between w-full">
+        
+        {/* TARJETA INTERACTIVA DE PERFIL (Actúa como el 'group' principal) */}
+        <div 
+          onClick={() => !compact && setShowMenu(!showMenu)}
+          className={`flex items-center gap-3 flex-1 min-w-0 rounded-xl transition-all duration-300 relative
+            ${!compact ? "cursor-pointer p-2 hover:bg-slate-700/30 group" : ""}
+          `}
+        >
+          {/* AVATAR ESTÁTICO */}
           <div className="avatar online flex-shrink-0">
-            <button
-              className={`${compact ? "w-10 h-10" : "w-14 h-14"} rounded-full overflow-hidden relative group`}
-              onClick={() => fileInputRef.current.click()}
-              title={authUser.fullName}
-            >
+            <div className={`${compact ? "w-10 h-10" : "w-12 h-12"} rounded-full overflow-hidden`}>
               <img
                 src={selectedImg || authUser.profilePic || "/avatar.png"}
                 alt="User image"
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                {!compact && <span className="text-white text-xs">Change</span>}
-              </div>
-            </button>
-
-            <input
-              type="file"
-              accept="image/*"
-              ref={fileInputRef}
-              onChange={handleImageUpload}
-              className="hidden"
-            />
+            </div>
           </div>
 
-          {/* USERNAME & ONLINE TEXT */}
+          {/* ÁREA DE TEXTO E ICONO EN HOVER */}
           {!compact && (
-            <div className="min-w-0 flex-1">
-              <h3 className="text-slate-200 font-medium text-base truncate" title={authUser.fullName}>
-                {authUser.fullName}
-              </h3>
-              <p className="text-slate-400 text-xs">Conectado</p>
+            <div className="flex items-center justify-between flex-1 min-w-0 w-full pr-1">
+              {/* Bloque de Textos */}
+              <div className="min-w-0 flex-1 transition-all duration-300 group-hover:pr-7">
+                {/* El nombre se trunca dinámicamente */}
+                <h3 className="text-slate-200 font-medium text-sm truncate" title={authUser.fullName}>
+                  {authUser.fullName}
+                </h3>
+                <p className="text-emerald-400 text-xs">
+                  Conectado
+                </p>
+              </div>
+
+              {/* RUEDITA DE CONFIGURACIÓN ANIMADA */}
+              <div className="absolute right-3 opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 flex items-center justify-center">
+                <Settings 
+                  className="w-4 h-4 text-slate-400 group-hover:text-cyan-400 group-hover:rotate-45 transition-all duration-300" 
+                />
+              </div>
             </div>
           )}
         </div>
 
-        {/* MENU BUTTON - Para todos los dispositivos */}
-        {!compact && (
-          <div className="flex-shrink-0 ml-16"> {/* Cambié ml-3 por ml-6 */}
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="text-slate-400 hover:text-slate-200 transition-colors p-2 rounded-full hover:bg-slate-700"
-              title="Menu"
-            >
-              <MoreVerticalIcon className="w-5 h-5" />
-            </button>
-          </div>
-        )}
+        {/* INPUT OCULTO PARA LA IMAGEN */}
+        <input
+          type="file"
+          accept="image/*"
+          ref={fileInputRef}
+          onChange={handleImageUpload}
+          className="hidden"
+        />
 
-        {/* MENU DROPDOWN - Para todos los dispositivos */}
-        {showMenu && (
+        {/* MENU DROPDOWN */}
+        {showMenu && !compact && (
           <>
             {/* Backdrop */}
             <div
               className="fixed inset-0 z-40"
-              onClick={() => setShowMenu(false)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMenu(false);
+              }}
             />
 
             {/* Menu */}
-<div className="absolute top-full right-0 mt-1 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50">
-  <div className="p-2 space-y-1">
-    {/* Find users */}
-    <button
-      onClick={() => handleMenuAction(() => setShowSearchModal(true))}
-      className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm"
-    >
-      <UserPlus className="w-4 h-4" />
-      <span>Agregar</span>
-    </button>
+            <div className="absolute top-full left-2 right-2 mt-2 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 animate-fadeIn">
+              <div className="p-1.5 space-y-0.5">
+                {/* Find users */}
+                <button
+                  onClick={() => handleMenuAction(() => setShowSearchModal(true))}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm"
+                >
+                  <UserPlus className="w-4 h-4 text-slate-400" />
+                  <span>Agregar</span>
+                </button>
 
-    {/* Contact requests */}
-    <button
-      onClick={() => handleMenuAction(() => setShowRequestsModal(true))}
-      className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm relative"
-    >
-      <Bell className="w-4 h-4" />
-      <span>Mis solicitudes</span>
-      <div className="absolute right-3">
-        <NotificationBadge />
-      </div>
-    </button>
+                {/* Contact requests */}
+                <button
+                  onClick={() => handleMenuAction(() => setShowRequestsModal(true))}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm relative"
+                >
+                  <Bell className="w-4 h-4 text-slate-400" />
+                  <span>Mis solicitudes</span>
+                  <div className="absolute right-3">
+                    <NotificationBadge />
+                  </div>
+                </button>
 
-    {/* Sound toggle */}
-    <button
-      onClick={() => handleMenuAction(handleToggleSound)}
-      className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm"
-    >
-      {isSoundEnabled ? (
-        <Volume2Icon className="w-4 h-4" />
-      ) : (
-        <VolumeOffIcon className="w-4 h-4" />
-      )}
-      <span>{isSoundEnabled ? "Silenciar notificaciones" : "Activar notificaciones"}</span>
-    </button>
+                {/* Cambiar foto de perfil */}
+                <button
+                  onClick={() => handleMenuAction(() => fileInputRef.current.click())}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm"
+                >
+                  <Camera className="w-4 h-4 text-slate-400" />
+                  <span>Cambiar foto de perfil</span>
+                </button>
 
-    {/* ================= OPCIÓN: CONFIGURACIÓN ================= */}
-    <button
-      onClick={() => handleMenuAction(() => navigate("/config"))}
-      className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm"
-    >
-      <Settings className="w-4 h-4" />
-      <span>Configuración</span>
-    </button>
+                {/* Sound toggle */}
+                <button
+                  onClick={() => handleMenuAction(handleToggleSound)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm"
+                >
+                  {isSoundEnabled ? (
+                    <Volume2Icon className="w-4 h-4 text-slate-400" />
+                  ) : (
+                    <VolumeOffIcon className="w-4 h-4 text-slate-400" />
+                  )}
+                  <span>{isSoundEnabled ? "Silenciar sonidos" : "Activar sonidos"}</span>
+                </button>
 
-    {/* Logout */}
-    <button
-      onClick={() => handleMenuAction(logout)}
-      className="w-full flex items-center gap-3 px-3 py-3 text-red-400 hover:bg-slate-700 rounded-md transition-colors text-sm"
-    >
-      <LogOutIcon className="w-4 h-4" />
-      <span>Cerrar sesión</span>
-    </button>
-  </div>
-</div>
+                {/* Configuración */}
+                <button
+                  onClick={() => handleMenuAction(() => navigate("/config"))}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm border-t border-slate-700/50 mt-1 pt-2"
+                >
+                  <Settings className="w-4 h-4 text-slate-400" />
+                  <span>Configuración</span>
+                </button>
+
+                {/* Logout */}
+                <button
+                  onClick={() => handleMenuAction(logout)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors text-sm"
+                >
+                  <LogOutIcon className="w-4 h-4" />
+                  <span>Cerrar sesión</span>
+                </button>
+              </div>
+            </div>
           </>
         )}
 
         {/* REQUESTS MODAL */}
         {showRequestsModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-slate-900 rounded p-4 w-11/12 max-w-md">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-slate-200 font-medium">Mis solicitudes</h4>
-                <button className="text-slate-400" onClick={() => setShowRequestsModal(false)}>Cerrar</button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowRequestsModal(false)}>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 w-11/12 max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-slate-200 font-bold text-lg">Mis solicitudes</h4>
+                <button className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-200 transition-colors" onClick={() => setShowRequestsModal(false)}>Cerrar</button>
               </div>
               <ContactRequests />
             </div>
