@@ -78,6 +78,7 @@ function ChatsList({ compact = false }) {
         ? lastMsg.text.substring(0, 30) + '...' 
         : lastMsg.text;
     }
+    if (lastMsg.mediaType === "video") return "🎥 Video";
     if (lastMsg.image) return "📷 Imagen";
     return "Mensaje";
   };

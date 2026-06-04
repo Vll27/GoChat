@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, XIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, PlayIcon, XIcon } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import ChatHeader from "./ChatHeader";
@@ -8,9 +8,9 @@ import MessageInput from "./MessageInput";
 import MessagesLoadingSkeleton from "./MessagesLoadingSkeleton";
 
 function ChatContainer() {
-  const [selectedImg, setSelectedImg] = useState(null);
-  const [selectedImgIndex, setSelectedImgIndex] = useState(-1);
-  const [isImageModalVisible, setIsImageModalVisible] = useState(false);
+  const [selectedMedia, setSelectedMedia] = useState(null);
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState(-1);
+  const [isMediaModalVisible, setIsMediaModalVisible] = useState(false);
   const {
     selectedUser,
     getMessagesByUserId,
@@ -26,7 +26,15 @@ function ChatContainer() {
   const isFirstLoad = useRef(true);
   const closeModalTimerRef = useRef(null);
 
-  const imageMessages = messages.filter((message) => message.image);
+  const getMediaType = (message) => {
+    if (message.mediaType) return message.mediaType;
+    if (typeof message.image === "string" && /\.(mp4|webm|ogg|mov|m4v)(\?|#|$)/i.test(message.image)) {
+      return "video";
+    }
+    return "image";
+  };
+
+  const mediaMessages = messages.filter((message) => message.image);
 
   useEffect(() => {
     if (selectedUser && selectedUser._id) {
@@ -96,67 +104,67 @@ function ChatContainer() {
     }
   };
 
-  const openImageModal = (imageUrl, index) => {
+  const openMediaModal = (mediaUrl, index) => {
     if (closeModalTimerRef.current) {
       clearTimeout(closeModalTimerRef.current);
     }
 
-    setSelectedImg(imageUrl);
-    setSelectedImgIndex(index);
-    setIsImageModalVisible(false);
+    setSelectedMedia(mediaUrl);
+    setSelectedMediaIndex(index);
+    setIsMediaModalVisible(false);
 
     requestAnimationFrame(() => {
-      setIsImageModalVisible(true);
+      setIsMediaModalVisible(true);
     });
   };
 
-  const closeImageModal = () => {
-    setIsImageModalVisible(false);
+  const closeMediaModal = () => {
+    setIsMediaModalVisible(false);
 
     if (closeModalTimerRef.current) {
       clearTimeout(closeModalTimerRef.current);
     }
 
     closeModalTimerRef.current = setTimeout(() => {
-      setSelectedImg(null);
-      setSelectedImgIndex(-1);
+      setSelectedMedia(null);
+      setSelectedMediaIndex(-1);
     }, 180);
   };
 
-  const navigateImage = (direction) => {
-    if (!imageMessages.length) return;
+  const navigateMedia = (direction) => {
+    if (!mediaMessages.length) return;
 
-    const nextIndex = (selectedImgIndex + direction + imageMessages.length) % imageMessages.length;
-    const nextImage = imageMessages[nextIndex];
+    const nextIndex = (selectedMediaIndex + direction + mediaMessages.length) % mediaMessages.length;
+    const nextMedia = mediaMessages[nextIndex];
 
-    if (!nextImage?.image) return;
+    if (!nextMedia?.image) return;
 
-    setSelectedImg(nextImage.image);
-    setSelectedImgIndex(nextIndex);
+    setSelectedMedia(nextMedia.image);
+    setSelectedMediaIndex(nextIndex);
   };
 
   useEffect(() => {
-    if (!selectedImg) return;
+    if (!selectedMedia) return;
 
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
-        closeImageModal();
+        closeMediaModal();
         return;
       }
 
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         event.stopPropagation();
-        navigateImage(-1);
+        navigateMedia(-1);
         return;
       }
 
       if (event.key === "ArrowRight") {
         event.preventDefault();
         event.stopPropagation();
-        navigateImage(1);
+        navigateMedia(1);
       }
     };
 
@@ -165,7 +173,7 @@ function ChatContainer() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [selectedImg, selectedImgIndex, imageMessages]);
+  }, [selectedMedia, selectedMediaIndex, mediaMessages]);
 
   useEffect(() => {
     return () => {
@@ -198,10 +206,30 @@ function ChatContainer() {
                         : "bg-slate-800 text-slate-200 rounded-bl-none"
                     } ${msg.isOptimistic ? "opacity-70 animate-pulse" : ""}`}
                   >
-                    {msg.image && (
+                    {msg.image && getMediaType(msg) === "video" ? (
                       <button
                         type="button"
-                        onClick={() => openImageModal(msg.image, imageMessages.findIndex((imageMessage) => imageMessage._id === msg._id))}
+                        onClick={() => openMediaModal(msg.image, mediaMessages.findIndex((mediaMessage) => mediaMessage._id === msg._id))}
+                        className="group relative block mb-2 rounded-lg overflow-hidden max-w-full"
+                        title="Abrir video"
+                      >
+                        <video
+                          src={msg.image}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="rounded-lg max-w-full h-auto object-cover max-h-64 hover:opacity-90 transition-opacity cursor-zoom-in bg-black"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-100 transition-opacity group-hover:bg-black/30">
+                          <div className="w-12 h-12 rounded-full bg-black/60 border border-white/20 flex items-center justify-center shadow-lg backdrop-blur-sm">
+                            <PlayIcon className="w-5 h-5 text-white ml-0.5" />
+                          </div>
+                        </div>
+                      </button>
+                    ) : msg.image ? (
+                      <button
+                        type="button"
+                        onClick={() => openMediaModal(msg.image, mediaMessages.findIndex((mediaMessage) => mediaMessage._id === msg._id))}
                         className="block mb-2 rounded-lg overflow-hidden max-w-full"
                         title="Abrir imagen"
                       >
@@ -211,7 +239,7 @@ function ChatContainer() {
                           className="rounded-lg max-w-full h-auto object-cover max-h-64 hover:opacity-90 transition-opacity cursor-zoom-in" 
                         />
                       </button>
-                    )}
+                    ) : null}
                     
                     {msg.text && (
                       <p className="break-words whitespace-pre-wrap text-base leading-relaxed">
@@ -238,22 +266,22 @@ function ChatContainer() {
 
       <MessageInput />
 
-      {selectedImg && (
+      {selectedMedia && (
         <div
           className={`fixed inset-0 z-[999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-200 ${
-            isImageModalVisible ? "opacity-100" : "opacity-0"
+            isMediaModalVisible ? "opacity-100" : "opacity-0"
           }`}
-          onClick={closeImageModal}
+          onClick={closeMediaModal}
         >
           <div
             className={`relative max-w-5xl max-h-full transform transition-all duration-200 ease-out ${
-              isImageModalVisible ? "scale-100 opacity-100" : "scale-95 opacity-0"
+              isMediaModalVisible ? "scale-100 opacity-100" : "scale-95 opacity-0"
             }`}
             onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
-              onClick={closeImageModal}
+              onClick={closeMediaModal}
               className="absolute -top-3 -right-3 z-10 w-10 h-10 rounded-full bg-slate-900/90 text-white flex items-center justify-center border border-slate-700 hover:bg-slate-800 transition-colors"
               aria-label="Cerrar imagen"
               title="Cerrar"
@@ -261,19 +289,29 @@ function ChatContainer() {
               ✕
             </button>
 
-            <img
-              src={selectedImg}
-              alt="Preview fullscreen"
-              className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl"
-            />
+            {selectedMediaIndex > -1 && getMediaType(mediaMessages[selectedMediaIndex]) === "video" ? (
+              <video
+                src={selectedMedia}
+                controls
+                autoPlay
+                playsInline
+                className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl bg-black"
+              />
+            ) : (
+              <img
+                src={selectedMedia}
+                alt="Preview fullscreen"
+                className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl"
+              />
+            )}
 
-            {imageMessages.length > 1 && (
+            {mediaMessages.length > 1 && (
               <>
                 <button
                   type="button"
-                  onClick={() => navigateImage(-1)}
+                  onClick={() => navigateMedia(-1)}
                   className="absolute left-[-3.5rem] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-slate-900/90 text-white border border-slate-700 flex items-center justify-center hover:bg-slate-800 transition-colors"
-                  aria-label="Imagen anterior"
+                  aria-label="Medio anterior"
                   title="Anterior"
                 >
                   <ChevronLeft className="w-5 h-5" />
@@ -281,9 +319,9 @@ function ChatContainer() {
 
                 <button
                   type="button"
-                  onClick={() => navigateImage(1)}
+                  onClick={() => navigateMedia(1)}
                   className="absolute right-[-3.5rem] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-slate-900/90 text-white border border-slate-700 flex items-center justify-center hover:bg-slate-800 transition-colors"
-                  aria-label="Imagen siguiente"
+                  aria-label="Medio siguiente"
                   title="Siguiente"
                 >
                   <ChevronRight className="w-5 h-5" />
@@ -292,7 +330,7 @@ function ChatContainer() {
             )}
 
             <div className="absolute bottom-[-2.5rem] left-1/2 -translate-x-1/2 text-xs text-slate-300 bg-slate-900/80 border border-slate-700 rounded-full px-3 py-1">
-              {selectedImgIndex + 1} / {imageMessages.length}
+              {selectedMediaIndex + 1} / {mediaMessages.length}
             </div>
           </div>
         </div>

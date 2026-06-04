@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import useKeyboardSound from "../hooks/useKeyboardSound";
+import { useMediaPreview } from "../hooks/useMediaPreview";
 import { useChatStore } from "../store/useChatStore";
 import toast from "react-hot-toast";
 import { ImageIcon, SendIcon, XIcon, SmileIcon, SearchIcon } from "lucide-react";
@@ -7,10 +8,17 @@ import { ImageIcon, SendIcon, XIcon, SmileIcon, SearchIcon } from "lucide-react"
 function MessageInput() {
   const { playRandomKeyStrokeSound } = useKeyboardSound();
   const [text, setText] = useState("");
-  const [imagePreview, setImagePreview] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("frequently");
+
+  const {
+    mediaFile,
+    mediaPreview,
+    mediaType,
+    selectMedia,
+    clearMedia,
+  } = useMediaPreview();
 
   const fileInputRef = useRef(null);
   const emojiPickerRef = useRef(null);
@@ -129,47 +137,61 @@ function MessageInput() {
       )
     : emojiCategories[activeCategory].emojis;
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!text.trim() && !imagePreview) return;
+    if (!text.trim() && !mediaFile) return;
     if (isSoundEnabled) playRandomKeyStrokeSound();
 
     // Preparar payload para servidor: FormData si hay archivo, JSON si no
-    const file = fileInputRef.current?.files?.[0];
     let payloadForServer;
-    if (file) {
+    if (mediaFile) {
       const fd = new FormData();
       if (text.trim()) fd.append("text", text.trim());
-      fd.append("image", file);
+      fd.append("image", mediaFile);
       payloadForServer = fd;
     } else {
-      payloadForServer = { text: text.trim(), image: imagePreview };
+      payloadForServer = { text: text.trim(), image: mediaPreview, mediaType };
     }
 
-    sendMessage({
-      text: text.trim(),
-      image: imagePreview,
-    }, payloadForServer);
-    setText("");
-    setImagePreview("");
-    setShowEmojiPicker(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (payloadForServer instanceof FormData) {
+      for (let [key, value] of payloadForServer.entries()) {
+        console.log(`FormData Entry - Key: ${key}, Value:`, value);
+      }
+    } else {
+      console.log("Payload JSON enviado:", payloadForServer);
+    }
+
+    try {
+      await sendMessage({
+        text: text.trim(),
+        image: mediaPreview,
+        mediaType,
+      }, payloadForServer);
+
+      setText("");
+      clearMedia();
+      setShowEmojiPicker(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (error) {
+      // El store ya maneja el toast y el rollback, aquí solo evitamos limpiar antes de tiempo.
+      console.error("Error enviando mensaje multimedia:", error);
+    }
   };
 
-  const handleImageChange = (e) => {
+  const handleMediaChange = (e) => {
     const file = e.target.files[0];
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file");
+    if (!file) return;
+
+    try {
+      selectMedia(file);
+    } catch (error) {
+      toast.error("Please select an image or video file");
       return;
     }
-
-    const reader = new FileReader();
-    reader.onloadend = () => setImagePreview(reader.result);
-    reader.readAsDataURL(file);
   };
 
-  const removeImage = () => {
-    setImagePreview(null);
+  const removeMedia = () => {
+    clearMedia();
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -189,16 +211,24 @@ function MessageInput() {
 
   return (
     <div className="p-4 border-t border-slate-700/50">
-      {imagePreview && (
+      {mediaPreview && (
         <div className="max-w-3xl mx-auto mb-3 flex items-center">
           <div className="relative">
-            <img
-              src={imagePreview}
-              alt="Preview"
-              className="w-20 h-20 object-cover rounded-lg border border-slate-700"
-            />
+            {mediaType === "video" ? (
+              <video
+                src={mediaPreview}
+                controls
+                className="w-28 h-20 object-cover rounded-lg border border-slate-700 bg-black"
+              />
+            ) : (
+              <img
+                src={mediaPreview}
+                alt="Preview"
+                className="w-20 h-20 object-cover rounded-lg border border-slate-700"
+              />
+            )}
             <button
-              onClick={removeImage}
+              onClick={removeMedia}
               className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-slate-200 hover:bg-slate-700 border border-slate-600"
               type="button"
             >
@@ -338,9 +368,9 @@ function MessageInput() {
         <div className="flex items-center gap-2 flex-shrink-0">
           <input
             type="file"
-            accept="image/*"
+            accept="image/*,video/*"
             ref={fileInputRef}
-            onChange={handleImageChange}
+            onChange={handleMediaChange}
             className="hidden"
           />
 
@@ -348,18 +378,18 @@ function MessageInput() {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className={`p-2 rounded-lg transition-all duration-200 ${
-              imagePreview 
+              mediaPreview 
                 ? "bg-cyan-600 text-white" 
                 : "bg-slate-800/50 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
             }`}
-            title="Subir imagen"
+            title="Subir archivo"
           >
             <ImageIcon className="w-5 h-5" />
           </button>
           
           <button
             type="submit"
-            disabled={!text.trim() && !imagePreview}
+            disabled={!text.trim() && !mediaFile}
             className="p-2 bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-lg font-medium hover:from-cyan-600 hover:to-cyan-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg shadow-cyan-500/20"
             title="Enviar mensaje"
           >

@@ -10,6 +10,7 @@ const uploadBufferToCloudinary = (buffer) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: "chat-images",
+        resource_type: "auto",
       },
       (error, result) => {
         if (error) {
@@ -105,7 +106,7 @@ export const sendMessage = async (req, res) => {
     const imageFile = req.file;
 
     if (!text && !imageFile) {
-      return res.status(400).json({ message: "Se requiere texto o imagen." });
+      return res.status(400).json({ message: "Se requiere texto, imagen o video." });
     }
     if (senderId.equals(receiverId)) {
       return res.status(400).json({ message: "No puedes enviarte mensajes a ti mismo." });
@@ -116,9 +117,11 @@ export const sendMessage = async (req, res) => {
     }
 
     let imageUrl;
+    let mediaType;
     if (imageFile?.buffer) {
       const uploadResponse = await uploadBufferToCloudinary(imageFile.buffer);
       imageUrl = uploadResponse.secure_url;
+      mediaType = imageFile.mimetype.startsWith("video/") ? "video" : "image";
     }
 
     const newMessage = new Message({
@@ -126,6 +129,7 @@ export const sendMessage = async (req, res) => {
       receiverId,
       text,
       image: imageUrl,
+      mediaType,
     });
 
     await newMessage.save();
