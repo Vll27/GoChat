@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { axiosInstance } from "../lib/axios";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
+import { useChatStore } from "./useChatStore";
 
 const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:3000" : "/";
 
@@ -64,13 +65,33 @@ export const useAuthStore = create((set, get) => ({
 
   logout: async () => {
     try {
-      await axiosInstance.post("/auth/logout");
+      await axiosInstance.post("/auth/logout").catch((err) => {
+        console.log("No se pudo contactar el servidor:", err.message);
+      });
+      
+      useChatStore.setState({ 
+        chats: [], 
+        messages: [], 
+        selectedUser: null,
+        allContacts: [] 
+      });
+      
       set({ authUser: null });
-      toast.success("Sesión cerrada correctamente");
       get().disconnectSocket();
+      toast.success("Sesión cerrada correctamente");
+      window.location.href = "/login";
+      
     } catch (error) {
-      toast.error("Error logging out");
-      console.log("Logout error:", error);
+      console.log("Logout error:", error.message);
+      useChatStore.setState({ 
+        chats: [], 
+        messages: [], 
+        selectedUser: null,
+        allContacts: [] 
+      });
+      set({ authUser: null });
+      get().disconnectSocket();
+      window.location.href = "/login";
     }
   },
 
@@ -105,18 +126,12 @@ export const useAuthStore = create((set, get) => ({
         console.log("🟢 Usuarios online actualizados:", userIds);
       });
       
-      // Evento para cuando un usuario se desconecta
       socket.on("userOffline", ({ userId, lastSeen }) => {
         console.log(`🔴 Usuario OFFLINE detectado: ${userId} a las ${new Date(lastSeen).toLocaleTimeString()}`);
         
-        // Remover de onlineUsers inmediatamente
         set({ onlineUsers: get().onlineUsers.filter(id => id !== userId) });
         
-        // Actualizar chatStore inmediatamente
         try {
-          const { useChatStore } = require("./useChatStore");
-          
-          // Actualizar el estado del usuario en chats
           const currentChats = useChatStore.getState().chats;
           const updatedChats = currentChats.map(chat => {
             if (chat.user?._id === userId) {
@@ -134,7 +149,6 @@ export const useAuthStore = create((set, get) => ({
           
           useChatStore.setState({ chats: updatedChats });
           
-          // Actualizar selectedUser si es necesario
           const selectedUser = useChatStore.getState().selectedUser;
           if (selectedUser?._id === userId) {
             useChatStore.setState({
@@ -146,8 +160,8 @@ export const useAuthStore = create((set, get) => ({
             });
           }
           
-          // Forzar recarga
-          if (useChatStore.getState().forceRefreshChats) {
+          const { authUser } = useAuthStore.getState();
+          if (authUser && useChatStore.getState().forceRefreshChats) {
             useChatStore.getState().forceRefreshChats();
           }
         } catch (e) {
@@ -165,7 +179,6 @@ export const useAuthStore = create((set, get) => ({
         }
         
         try {
-          const { useChatStore } = require("./useChatStore");
           const currentChats = useChatStore.getState().chats;
           
           const updatedChats = currentChats.map(chat => {
@@ -195,13 +208,29 @@ export const useAuthStore = create((set, get) => ({
             });
           }
           
-          if (useChatStore.getState().forceRefreshChats) {
+          const { authUser } = useAuthStore.getState();
+          if (authUser && useChatStore.getState().forceRefreshChats) {
             setTimeout(() => {
               useChatStore.getState().forceRefreshChats();
             }, 50);
           }
         } catch (e) {
           console.log("Error:", e.message);
+        }
+      });
+
+      // 👈 NUEVO: Cuando el socket se conecta, notificar a todos los contactos
+      // que este usuario está online y marcar mensajes pendientes como entregados
+      socket.on("connect", () => {
+        console.log("✅ Socket conectado, notificando a contactos...");
+        
+        const { chats } = useChatStore.getState();
+        if (chats && chats.length > 0) {
+          chats.forEach(chat => {
+            if (chat.user?._id) {
+              socket.emit("markPendingMessagesAsDelivered", { senderId: chat.user._id });
+            }
+          });
         }
       });
 

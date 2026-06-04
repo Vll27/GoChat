@@ -1,10 +1,10 @@
-import { useState, useRef } from "react";
-import {
-  LogOutIcon,
-  VolumeOffIcon,
-  Volume2Icon,
-  Bell,
-  UserPlus,
+import { useState, useRef, useEffect } from "react";
+import { 
+  LogOutIcon, 
+  VolumeOffIcon, 
+  Volume2Icon, 
+  Bell, 
+  UserPlus, 
   MoreVerticalIcon
 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
@@ -17,15 +17,22 @@ const mouseClickSound = new Audio("/sounds/mouse-click.mp3");
 
 function ProfileHeader({ compact = false }) {
   const { logout, authUser, updateProfile } = useAuthStore();
-  const { isSoundEnabled, toggleSound } = useChatStore();
+  const { isSoundEnabled, toggleSound, resetChatState } = useChatStore();
   const [selectedImg, setSelectedImg] = useState(null);
   const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const fileInputRef = useRef(null);
 
-  const handleImageUpload = (e) => {
+  useEffect(() => {
+    if (!authUser) {
+      setShowMenu(false);
+      setShowRequestsModal(false);
+      setShowSearchModal(false);
+    }
+  }, [authUser]);
 
+  const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -50,12 +57,20 @@ function ProfileHeader({ compact = false }) {
     setShowMenu(false);
   };
 
+  const handleLogout = async () => {
+    setShowMenu(false);
+    if (resetChatState) {
+      resetChatState();
+    }
+    await logout();
+  };
+
+  if (!authUser) return null;
+
   return (
     <div className={`${compact ? "p-3" : "p-6"} relative`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-
-          {/* AVATAR */}
           <div className="avatar online flex-shrink-0">
             <button
               className={`${compact ? "w-10 h-10" : "w-14 h-14"} rounded-full overflow-hidden relative group`}
@@ -81,7 +96,6 @@ function ProfileHeader({ compact = false }) {
             />
           </div>
 
-          {/* USERNAME & ONLINE TEXT */}
           {!compact && (
             <div className="min-w-0 flex-1">
               <h3 className="text-slate-200 font-medium text-base truncate" title={authUser.fullName}>
@@ -92,9 +106,8 @@ function ProfileHeader({ compact = false }) {
           )}
         </div>
 
-        {/* MENU BUTTON - Para todos los dispositivos */}
         {!compact && (
-          <div className="flex-shrink-0 ml-16"> {/* Cambié ml-3 por ml-6 */}
+          <div className="flex-shrink-0 ml-16">
             <button
               onClick={() => setShowMenu(!showMenu)}
               className="text-slate-400 hover:text-slate-200 transition-colors p-2 rounded-full hover:bg-slate-700"
@@ -105,19 +118,14 @@ function ProfileHeader({ compact = false }) {
           </div>
         )}
 
-        {/* MENU DROPDOWN - Para todos los dispositivos */}
         {showMenu && (
           <>
-            {/* Backdrop */}
             <div
               className="fixed inset-0 z-40"
               onClick={() => setShowMenu(false)}
             />
-
-            {/* Menu */}
             <div className="absolute top-full right-0 mt-1 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50">
               <div className="p-2 space-y-1">
-                {/* Find users */}
                 <button
                   onClick={() => handleMenuAction(() => setShowSearchModal(true))}
                   className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm"
@@ -126,7 +134,6 @@ function ProfileHeader({ compact = false }) {
                   <span>Agregar</span>
                 </button>
 
-                {/* Contact requests */}
                 <button
                   onClick={() => handleMenuAction(() => setShowRequestsModal(true))}
                   className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm relative"
@@ -138,7 +145,6 @@ function ProfileHeader({ compact = false }) {
                   </div>
                 </button>
 
-                {/* Sound toggle */}
                 <button
                   onClick={() => handleMenuAction(handleToggleSound)}
                   className="w-full flex items-center gap-3 px-3 py-3 text-slate-300 hover:bg-slate-700 rounded-md transition-colors text-sm"
@@ -151,9 +157,8 @@ function ProfileHeader({ compact = false }) {
                   <span>{isSoundEnabled ? "Silenciar notificaciones" : "Activar notificaciones"}</span>
                 </button>
 
-                {/* Logout */}
                 <button
-                  onClick={() => handleMenuAction(logout)}
+                  onClick={handleLogout}
                   className="w-full flex items-center gap-3 px-3 py-3 text-red-400 hover:bg-slate-700 rounded-md transition-colors text-sm"
                 >
                   <LogOutIcon className="w-4 h-4" />
@@ -164,8 +169,7 @@ function ProfileHeader({ compact = false }) {
           </>
         )}
 
-        {/* REQUESTS MODAL */}
-        {showRequestsModal && (
+        {showRequestsModal && authUser && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
             <div className="bg-slate-900 rounded p-4 w-11/12 max-w-md">
               <div className="flex items-center justify-between mb-3">
@@ -177,8 +181,9 @@ function ProfileHeader({ compact = false }) {
           </div>
         )}
 
-        {/* SEARCH MODAL */}
-        <SearchUsersModal isOpen={showSearchModal} onClose={() => setShowSearchModal(false)} />
+        {showSearchModal && authUser && (
+          <SearchUsersModal isOpen={showSearchModal} onClose={() => setShowSearchModal(false)} />
+        )}
       </div>
     </div>
   );

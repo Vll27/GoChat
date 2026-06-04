@@ -5,73 +5,56 @@ export const connectDB = async () => {
   try {
     const { MONGO_URI } = ENV;
     if (!MONGO_URI) {
-      console.error("MONGO_URI no está configurada. Saltando conexión a BD.");
-      return;
+      console.error("❌ MONGO_URI no está configurada");
+      process.exit(1);
     }
 
     mongoose.set("strictQuery", false);
-
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("Conectando a MongoDB...");
-    }
     
-    // CONFIGURACIÓN MEJORADA PARA CONEXIONES ESTABLES
+    // ✅ Configuración optimizada para producción
     const conn = await mongoose.connect(MONGO_URI, {
-      maxPoolSize: 5, // Reducido para mejor estabilidad
-      minPoolSize: 1,
-      serverSelectionTimeoutMS: 30000, // 30 segundos
-      socketTimeoutMS: 45000, // 45 segundos
-      connectTimeoutMS: 30000, // Agregar timeout de conexión
+      maxPoolSize: 20,        // Para 10k usuarios concurrentes
+      minPoolSize: 5,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+      connectTimeoutMS: 10000,
       retryWrites: true,
       retryReads: true,
       w: 'majority',
-      // Opciones adicionales para mejorar estabilidad
       maxIdleTimeMS: 30000,
-      waitQueueTimeoutMS: 10000
+      waitQueueTimeoutMS: 10000,
+      heartbeatFrequencyMS: 10000,
     });
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("MongoDB conectado exitosamente:", conn.connection.host);
-      console.log("Nombre de la base de datos:", conn.connection.name);
-    }
+    console.log(`✅ MongoDB conectado: ${conn.connection.host}`);
+    console.log(`📊 Base de datos: ${conn.connection.name}`);
+    console.log(`🔌 Pool size: ${conn.connection.client.options.maxPoolSize}`);
 
-    // Manejo de eventos de conexión mejorado
+    // ✅ Eventos de conexión mejorados
     mongoose.connection.on('error', (err) => {
-      console.error('Error de conexión MongoDB:', err.message);
-      if (process.env.NODE_ENV !== 'production') {
-        console.error('Error details:', err);
-      }
+      console.error('❌ MongoDB error:', err.message);
     });
 
     mongoose.connection.on('disconnected', () => {
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('MongoDB desconectado - Intentando reconectar...');
-      }
+      console.warn('⚠️ MongoDB desconectado. Reconectando...');
     });
 
     mongoose.connection.on('reconnected', () => {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('MongoDB reconectado exitosamente');
-      }
-    });
-
-    mongoose.connection.on('connecting', () => {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('Conectando a MongoDB...');
-      }
-    });
-
-    mongoose.connection.on('connected', () => {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('MongoDB conectado');
-      }
+      console.log('✅ MongoDB reconectado');
     });
 
   } catch (error) {
-    console.error("Error conectando a MongoDB:", error.message);
-    if (process.env.NODE_ENV !== 'production') {
-      console.error("Stack trace:", error.stack);
+    console.error("❌ Error conectando a MongoDB:", error.message);
+    // No hacer exit(1) en producción, dejar que el orquestador maneje el reinicio
+    if (ENV.NODE_ENV !== 'production') {
+      process.exit(1);
     }
-    process.exit(1);
+    throw error;
   }
+};
+
+// ✅ Graceful disconnect
+export const disconnectDB = async () => {
+  await mongoose.disconnect();
+  console.log('✅ MongoDB desconectado');
 };

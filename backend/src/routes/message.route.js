@@ -6,6 +6,8 @@ import {
   getMessagesByUserId,
   sendMessage,
   searchUsers,
+  updateMessageStatus, // 👈 NUEVO import
+  markMessagesAsRead,  // 👈 NUEVO import
 } from "../controllers/message.controller.js";
 import { protectRoute } from "../middleware/auth.middleware.js";
 import { arcjetProtection } from "../middleware/arcjet.middleware.js";
@@ -35,5 +37,9 @@ router.get("/search", searchUsers);
 router.get("/chats", getChatPartners);
 router.get("/:id", getMessagesByUserId);
 router.post("/send/:id", upload.single("image"), sendMessage);
+
+// 👈 NUEVAS RUTAS para estados de mensajes
+router.patch("/status/:messageId", updateMessageStatus);
+router.post("/read/:senderId", markMessagesAsRead);
 
 export default router;
