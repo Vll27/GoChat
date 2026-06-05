@@ -56,11 +56,12 @@ function ProfileHeader({ compact = false }) {
     <div className={`${compact ? "p-1" : "p-2"} relative w-full`}>
       <div className="flex items-center justify-between w-full">
         
-        {/* TARJETA INTERACTIVA DE PERFIL (Actúa como el 'group' principal) */}
+        {/* TARJETA INTERACTIVA DE PERFIL */}
         <div 
           onClick={() => !compact && setShowMenu(!showMenu)}
           className={`flex items-center gap-3 flex-1 min-w-0 rounded-xl transition-all duration-300 relative
             ${!compact ? "cursor-pointer p-2 hover:bg-slate-700/30 group" : ""}
+            ${showMenu && !compact ? "bg-slate-700/40" : ""}
           `}
         >
           {/* AVATAR ESTÁTICO */}
@@ -79,7 +80,6 @@ function ProfileHeader({ compact = false }) {
             <div className="flex items-center justify-between flex-1 min-w-0 w-full pr-1">
               {/* Bloque de Textos */}
               <div className="min-w-0 flex-1 transition-all duration-300 group-hover:pr-7">
-                {/* El nombre se trunca dinámicamente */}
                 <h3 className="text-slate-200 font-medium text-sm truncate" title={authUser.fullName}>
                   {authUser.fullName}
                 </h3>
@@ -88,10 +88,12 @@ function ProfileHeader({ compact = false }) {
                 </p>
               </div>
 
-              {/* RUEDITA DE CONFIGURACIÓN ANIMADA */}
-              <div className="absolute right-3 opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 flex items-center justify-center">
+              {/* RUEDITA DE CONFIGURACIÓN ANIMADA (Pista sutil de opacidad fija) */}
+              <div className="absolute right-3 opacity-25 scale-90 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 flex items-center justify-center">
                 <Settings 
-                  className="w-4 h-4 text-slate-400 group-hover:text-cyan-400 group-hover:rotate-45 transition-all duration-300" 
+                  className={`w-4 h-4 text-slate-400 group-hover:text-cyan-400 transition-all duration-500
+                    ${showMenu ? "rotate-90 text-cyan-400" : "group-hover:rotate-45"}
+                  `} 
                 />
               </div>
             </div>
@@ -107,85 +109,95 @@ function ProfileHeader({ compact = false }) {
           className="hidden"
         />
 
-        {/* MENU DROPDOWN */}
-        {showMenu && !compact && (
-          <>
-            {/* Backdrop */}
-            <div
-              className="fixed inset-0 z-40"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMenu(false);
-              }}
-            />
+        {/* MENU DROPDOWN CON TRANSICIÓN SUAVE */}
+{!compact && (
+  <>
+    {/* Backdrop controlado por pointer-events para cerrar el menú */}
+    <div
+      className={`fixed inset-0 z-40 transition-opacity duration-300 ${
+        showMenu ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+      }`}
+      onClick={(e) => {
+        e.stopPropagation();
+        setShowMenu(false);
+      }}
+    />
 
-            {/* Menu */}
-            <div className="absolute top-full left-2 right-2 mt-2 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 animate-fadeIn">
-              <div className="p-1.5 space-y-0.5">
-                {/* Find users */}
-                <button
-                  onClick={() => handleMenuAction(() => setShowSearchModal(true))}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm"
-                >
-                  <UserPlus className="w-4 h-4 text-slate-400" />
-                  <span>Agregar</span>
-                </button>
+    {/* Cuadro del menú con animación fluida HACIA ABAJO */}
+    <div 
+      className={`absolute left-2 right-2 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 
+        transition-all duration-300 ease-out origin-top top-full
+        ${showMenu 
+          ? "opacity-100 scale-100 translate-y-2 pointer-events-auto" 
+          : "opacity-0 scale-95 translate-y-0 pointer-events-none"
+        }
+      `}
+    >
+      <div className="p-1.5 space-y-0.5">
+        {/* Find users */}
+        <button
+          onClick={() => handleMenuAction(() => setShowSearchModal(true))}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm"
+        >
+          <UserPlus className="w-4 h-4 text-slate-400" />
+          <span>Agregar</span>
+        </button>
 
-                {/* Contact requests */}
-                <button
-                  onClick={() => handleMenuAction(() => setShowRequestsModal(true))}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm relative"
-                >
-                  <Bell className="w-4 h-4 text-slate-400" />
-                  <span>Mis solicitudes</span>
-                  <div className="absolute right-3">
-                    <NotificationBadge />
-                  </div>
-                </button>
+        {/* Contact requests */}
+        <button
+          onClick={() => handleMenuAction(() => setShowRequestsModal(true))}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm relative"
+        >
+          <Bell className="w-4 h-4 text-slate-400" />
+          <span>Mis solicitudes</span>
+          <div className="absolute right-3">
+            <NotificationBadge />
+          </div>
+        </button>
 
-                {/* Cambiar foto de perfil */}
-                <button
-                  onClick={() => handleMenuAction(() => fileInputRef.current.click())}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm"
-                >
-                  <Camera className="w-4 h-4 text-slate-400" />
-                  <span>Cambiar foto de perfil</span>
-                </button>
+        {/* Cambiar foto de perfil */}
+        <button
+          onClick={() => handleMenuAction(() => fileInputRef.current.click())}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm"
+        >
+          <Camera className="w-4 h-4 text-slate-400" />
+          <span>Cambiar foto de perfil</span>
+        </button>
 
-                {/* Sound toggle */}
-                <button
-                  onClick={() => handleMenuAction(handleToggleSound)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm"
-                >
-                  {isSoundEnabled ? (
-                    <Volume2Icon className="w-4 h-4 text-slate-400" />
-                  ) : (
-                    <VolumeOffIcon className="w-4 h-4 text-slate-400" />
-                  )}
-                  <span>{isSoundEnabled ? "Silenciar sonidos" : "Activar sonidos"}</span>
-                </button>
+        {/* Sound toggle */}
+        <button
+          onClick={() => handleMenuAction(handleToggleSound)}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm"
+        >
+          {isSoundEnabled ? (
+            <Volume2Icon className="w-4 h-4 text-slate-400" />
+          ) : (
+            <VolumeOffIcon className="w-4 h-4 text-slate-400" />
+          )}
+          <span>{isSoundEnabled ? "Silenciar sonidos" : "Activar sonidos"}</span>
+        </button>
 
-                {/* Configuración */}
-                <button
-                  onClick={() => handleMenuAction(() => navigate("/config"))}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm border-t border-slate-700/50 mt-1 pt-2"
+        {/* Configuración */}
+        <button
+          onClick={() => handleMenuAction(() => navigate("/config"))}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700/60 rounded-lg transition-colors text-sm border-t border-slate-700/50 mt-1 pt-2"
                 >
-                  <Settings className="w-4 h-4 text-slate-400" />
-                  <span>Configuración</span>
-                </button>
+          <Settings className="w-4 h-4 text-slate-400" />
+          <span>Configuración</span>
+        </button>
 
-                {/* Logout */}
-                <button
-                  onClick={() => handleMenuAction(logout)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors text-sm"
-                >
-                  <LogOutIcon className="w-4 h-4" />
-                  <span>Cerrar sesión</span>
-                </button>
-              </div>
-            </div>
-          </>
-        )}
+        {/* Logout */}
+        <button
+          onClick={() => handleMenuAction(logout)}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors text-sm"
+        >
+          <LogOutIcon className="w-4 h-4" />
+          <span>Cerrar sesión</span>
+        </button>
+      </div>
+    </div>
+  </>
+)}
 
         {/* REQUESTS MODAL */}
         {showRequestsModal && (
