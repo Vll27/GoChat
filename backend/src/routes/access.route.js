@@ -1,4 +1,4 @@
-git import { Router } from "express";
+import { Router } from "express";
 import { randomUUID } from "crypto";
 import prisma from "../lib/prismaClient.js";
 import { validarTokenAcceso } from "../middleware/prismaAccess.middleware.js";
