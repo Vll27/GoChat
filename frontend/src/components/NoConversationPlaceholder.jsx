@@ -17,10 +17,10 @@ const NoConversationPlaceholder = () => {
         
         {/* Texto responsive */}
         <h2 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold text-slate-200 mb-2 sm:mb-3 lg:mb-4">
-          Selecciona una conversación
+          Seleccioná un contacto
         </h2>
         <p className="text-slate-400 text-sm sm:text-base lg:text-lg xl:text-xl leading-relaxed">
-          Elige un contacto de la barra lateral para empezar a chatear o continuar una conversación anterior.<br className="hidden sm:block" />
+          Elegí un contacto para ver el historial de mensajes y empezar a chatear.<br className="hidden sm:block" />
            
         </p>
       </div>

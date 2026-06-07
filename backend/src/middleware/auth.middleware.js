@@ -8,32 +8,37 @@ export const protectRoute = async (req, res, next) => {
     return;
   }
 
+  // 👈 EXCLUIR la ruta de logout de la autenticación
+  if (req.path === "/logout") {
+    console.log("⏩ Excluyendo /logout de autenticación");
+    return next();
+  }
+
   try {
-    console.log(" protectRoute middleware executing for:", req.path);
+    console.log("🔐 protectRoute middleware executing for:", req.path);
     
     const token = req.cookies.jwt;
-    console.log(" Token from cookies:", token ? "Present" : "Missing");
+    console.log("📌 Token from cookies:", token ? "Present" : "Missing");
     
     if (!token) {
       return res.status(401).json({ message: "Unauthorized - No token provided" });
     }
 
     const decoded = jwt.verify(token, ENV.JWT_SECRET);
-    console.log(" Token decoded successfully, userId:", decoded.userId);
+    console.log("✅ Token decoded successfully, userId:", decoded.userId);
     
     if (!decoded) {
       return res.status(401).json({ message: "Unauthorized - Invalid token" });
     }
 
     const user = await User.findById(decoded.userId).select("-password");
-    console.log(" User found in DB:", user ? `Yes (${user.fullName})` : "No");
+    console.log("✅ User found in DB:", user ? `Yes (${user.fullName})` : "No");
     
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 👈 ACTUALIZAR: cada request activo actualiza el lastSeen
-    // Solo actualizar si ha pasado más de 1 minuto (evitar muchas escrituras)
+    // Actualizar lastSeen cada request activo (solo si ha pasado más de 1 minuto)
     const oneMinuteAgo = new Date(Date.now() - 60000);
     if (!user.lastSeen || user.lastSeen < oneMinuteAgo) {
       user.lastSeen = new Date();
@@ -50,10 +55,10 @@ export const protectRoute = async (req, res, next) => {
     }
 
     req.user = user;
-    console.log(" protectRoute completed successfully");
+    console.log("✅ protectRoute completed successfully");
     next();
   } catch (error) {
-    console.log(" Error in protectRoute middleware:", error.message);
+    console.log("❌ Error in protectRoute middleware:", error.message);
     
     if (res.headersSent || req.socket.destroyed) {
       console.log("Response already sent or connection destroyed, skipping error response");

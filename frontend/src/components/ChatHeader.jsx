@@ -5,14 +5,13 @@ import { useAuthStore } from "../store/useAuthStore";
 
 function ChatHeader() {
   const { selectedUser, setSelectedUser, forceRefreshChats } = useChatStore();
-  const { onlineUsers, socket } = useAuthStore();
+  const { onlineUsers, socket, authUser } = useAuthStore();
   const [lastSeenText, setLastSeenText] = useState("");
   
   const isOnline = onlineUsers.includes(selectedUser?._id);
   
-  // Función para formatear la última conexión estilo WhatsApp
   const formatLastSeen = useCallback((lastSeen) => {
-    if (!lastSeen) return "Última vez desconocida";
+    if (!lastSeen) return "últ. vez desconocida";
     
     const now = new Date();
     const lastSeenDate = new Date(lastSeen);
@@ -20,19 +19,38 @@ function ChatHeader() {
     const diffInMinutes = Math.floor(diffInSeconds / 60);
     
     if (diffInSeconds < 60) {
-      return `Última vez hace ${diffInSeconds} segundos`;
+      return `últ. vez hace ${diffInSeconds} segundos`;
     }
     
     if (diffInMinutes < 60) {
-      return `Última vez hace ${diffInMinutes} ${diffInMinutes === 1 ? 'minuto' : 'minutos'}`;
+      return `últ. vez hace ${diffInMinutes} ${diffInMinutes === 1 ? 'minuto' : 'minutos'}`;
     }
     
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) {
-      return `Última vez hoy a las ${lastSeenDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
+    const formatTime = (date) => {
+      return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    };
+    
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfLastSeen = new Date(lastSeenDate.getFullYear(), lastSeenDate.getMonth(), lastSeenDate.getDate());
+    const diffInDays = Math.floor((startOfToday - startOfLastSeen) / (1000 * 60 * 60 * 24));
+    
+    if (diffInDays === 0) {
+      return `últ. vez hoy a las ${formatTime(lastSeenDate)}`;  
     }
     
-    return `Última vez el ${lastSeenDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}`;
+    if (diffInDays === 1) {
+      return `últ. vez ayer a las ${formatTime(lastSeenDate)}`;  
+    }
+    
+    const formatDateWithYear = (date) => {
+      return date.toLocaleDateString('es-ES', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric'
+      });
+    };
+    
+    return `últ. vez ${formatDateWithYear(lastSeenDate)} a las ${formatTime(lastSeenDate)}`;  
   }, []);
   
   const updateText = useCallback(() => {
@@ -44,11 +62,10 @@ function ChatHeader() {
     } else if (selectedUser.lastSeen) {
       setLastSeenText(formatLastSeen(selectedUser.lastSeen));
     } else {
-      setLastSeenText("Última vez desconocida");
+      setLastSeenText("últ. vez desconocida");  
     }
   }, [selectedUser, onlineUsers, formatLastSeen]);
   
-  // Actualizar cada segundo cuando está offline
   useEffect(() => {
     updateText();
     
@@ -62,13 +79,13 @@ function ChatHeader() {
     };
   }, [updateText, isOnline, selectedUser]);
   
-  // Escuchar eventos del socket
   useEffect(() => {
-    if (!socket || !selectedUser) return;
+    if (!socket || !selectedUser || !authUser) return;
     
     const handleStatusChange = ({ userId, status, lastSeen }) => {
+      if (!authUser) return;
       if (userId === selectedUser._id) {
-        console.log(`🔄 Header: ${selectedUser.fullName} -> ${status} a las ${new Date(lastSeen).toLocaleTimeString()}`);
+        console.log(`🔄 Header: ${selectedUser.fullName} -> ${status}`);
         
         useChatStore.setState((state) => ({
           selectedUser: {
@@ -81,14 +98,15 @@ function ChatHeader() {
         updateText();
         
         setTimeout(() => {
-          forceRefreshChats();
+          if (authUser) forceRefreshChats();
         }, 50);
       }
     };
     
     const handleUserOffline = ({ userId, lastSeen }) => {
+      if (!authUser) return;
       if (userId === selectedUser._id) {
-        console.log(`🔴 Header: ${selectedUser.fullName} se ha desconectado a las ${new Date(lastSeen).toLocaleTimeString()}`);
+        console.log(`🔴 Header: ${selectedUser.fullName} se ha desconectado`);
         
         useChatStore.setState((state) => ({
           selectedUser: {
@@ -109,18 +127,22 @@ function ChatHeader() {
       socket.off("userStatusChanged", handleStatusChange);
       socket.off("userOffline", handleUserOffline);
     };
-  }, [socket, selectedUser, updateText, forceRefreshChats]);
+  }, [socket, selectedUser, updateText, forceRefreshChats, authUser]);
   
+  // ✅ CORREGIDO: Solo cerrar con ESC si hay usuario seleccionado
   useEffect(() => {
     const handleEscKey = (event) => {
-      if (event.key === "Escape") setSelectedUser(null);
+      if (event.key === "Escape" && selectedUser) {
+        console.log("🔴 ESC presionado - cerrando chat");
+        setSelectedUser(null);
+      }
     };
     
     window.addEventListener("keydown", handleEscKey);
     return () => window.removeEventListener("keydown", handleEscKey);
-  }, [setSelectedUser]);
+  }, [setSelectedUser, selectedUser]);
   
-  if (!selectedUser) return null;
+  if (!selectedUser || !authUser) return null;
   
   return (
     <div className="flex justify-between items-center bg-slate-800/50 border-b border-slate-700/50 max-h-[84px] px-6 flex-1">

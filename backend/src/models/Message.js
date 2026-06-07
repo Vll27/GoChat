@@ -6,11 +6,13 @@ const messageSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
     receiverId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
     text: {
       type: String,
@@ -20,18 +22,65 @@ const messageSchema = new mongoose.Schema(
     image: {
       type: String,
     },
-    mediaType: {
+mediaType: {
       type: String,
       enum: ["image", "video"],
     },
+    status: {
+      type: String,
+      enum: ["sending", "sent", "delivered", "read"],
+      default: "sent",
+      index: true,
+    },
+    // NUEVOS CAMPOS PARA EDICIÓN
+    editedAt: {
+      type: Date,
+      default: null,
+    },
+    originalText: {
+      type: String,
+      default: null,
+    },
+    // NUEVOS CAMPOS PARA ELIMINACIÓN
+    deletedForEveryone: {
+      type: Boolean,
+      default: false,
+    },
+    deletedForEveryoneAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
-  { timestamps: true }
+  { 
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+  }
 );
 
-// Índices para mejor rendimiento
+// Virtual para saber si el mensaje fue editado
+messageSchema.virtual('isEdited').get(function() {
+  return this.editedAt !== null && this.editedAt !== undefined;
+});
+
+// Virtual para saber si el mensaje fue eliminado para todos
+messageSchema.virtual('isDeletedForEveryone').get(function() {
+  return this.deletedForEveryone === true;
+});
+
+// Índices compuestos críticos
 messageSchema.index({ senderId: 1, receiverId: 1, createdAt: -1 });
-messageSchema.index({ receiverId: 1, senderId: 1, createdAt: -1 });
+messageSchema.index({ receiverId: 1, status: 1, createdAt: -1 });
 messageSchema.index({ createdAt: -1 });
+messageSchema.index({ senderId: 1, createdAt: -1 });
+messageSchema.index({ receiverId: 1, senderId: 1, status: 1 });
+messageSchema.index({ deletedForEveryone: 1 });
+messageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 31536000 });
 
 const Message = mongoose.model("Message", messageSchema);
 

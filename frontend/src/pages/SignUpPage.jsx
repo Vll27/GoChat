@@ -10,7 +10,9 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   AlertCircleIcon,
-  SparklesIcon
+  SparklesIcon,
+  EyeIcon,
+  EyeOffIcon
 } from "lucide-react";
 import { Link } from "react-router";
 import { StrictEmailValidator, validatePassword } from "../lib/validationUtils";
@@ -27,9 +29,11 @@ function SignUpPage() {
     formValid: false
   });
   const [showPasswordValidation, setShowPasswordValidation] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   
   const { signup, isSigningUp } = useAuthStore();
   const emailValidator = new StrictEmailValidator();
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   // Validación en tiempo real
   useEffect(() => {
@@ -86,8 +90,19 @@ function SignUpPage() {
   };
 
   return (
-    <div className="w-full flex items-center justify-center p-4 bg-slate-900 min-h-screen">
-      <div className="relative w-full max-w-6xl md:h-[800px] h-auto">
+    <div className="w-full flex items-center justify-center p-4 bg-black min-h-screen relative overflow-hidden group"
+      onMouseMove={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setMousePos({x: e.clientX - rect.left, y: e.clientY - rect.top})
+      }}>
+        {/* Efecto de luz radia cyan */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out"
+          style={{
+            background: `radial-gradient(600px circle at ${mousePos.x}px ${mousePos.y}px, rgba(6, 182, 212, 0.15), transparent 75%)`,
+          }}
+        />
+        <div className="relative w-full max-w-6xl md:h-[800px] h-auto z-10">
         <BorderAnimatedContainer>
           <div className="w-full flex flex-col md:flex-row">
             {/* COLUMNA DE FORMULARIO - LADO IZQUIERDO */}
@@ -97,14 +112,14 @@ function SignUpPage() {
                 <div className="text-center mb-8">
                   <MessageCircleIcon className="w-12 h-12 mx-auto text-slate-400 mb-4" />
                   <h2 className="text-2xl font-bold text-slate-200 mb-2">Crear cuenta</h2>
-                  <p className="text-slate-400">Ingresá los siguientes datos para empezar a chatear.</p>
+                  <p className="text-slate-400">Registráte y empezá ya en GoChat.</p>
                 </div>
 
                 {/* FORM */}
                 <form onSubmit={handleSubmit} className="space-y-8">
                   {/* NOMBRE COMPLETO */}
                   <div className="space-y-2">
-                    <label className="auth-input-label">Usuario</label>
+                    <label className="auth-input-label">Ingrese un usuario</label>
                     <div className="relative">
                       <UserIcon className="auth-input-icon" />
                       <input
@@ -112,7 +127,7 @@ function SignUpPage() {
                         value={formData.fullName}
                         onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                         className="input"
-                        placeholder="Octavio Cortez"
+                        placeholder="Su usuario"
                         required
                       />
                     </div>
@@ -178,14 +193,23 @@ function SignUpPage() {
                     <div className="relative">
                       <LockIcon className="auth-input-icon" />
                       <input
-                        type="password"
+                        type={showPassword ? "text" : "password"} // Cambio dinámico xdxdxd
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         className={`input ${formData.password ? (validation.password.isValid ? 'border-green-500' : validation.password.isValid === false ? 'border-red-500' : '') : ''}`}
-                        placeholder="Introduce tu contraseña"
+                        placeholder="Contraseña"
                         required
                       />
                     </div>
+
+                    <div
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/3 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOffIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                    </div>
+                    <p className="text-slate-400">Nunca compartás tu contraseña con nadie. Nisiquiera con GoChat.</p>
                     
                     {/* Indicador de fortaleza de contraseña - SOLO SE MUESTRA SI NO ES VÁLIDA */}
                     {formData.password && showPasswordValidation && !validation.password.isValid && (
@@ -248,7 +272,7 @@ function SignUpPage() {
                           <span>Creando cuenta...</span>
                         </div>
                       ) : (
-                        "Crear una cuenta"
+                        "Crear cuenta"
                       )}
                     </button>
                   </div>
@@ -256,7 +280,7 @@ function SignUpPage() {
 
                 <div className="mt-8 text-center">
                   <Link to="/login" className="auth-link hover:text-cyan-300 transition-colors">
-                    ¿Ya tienes una cuenta? Inicia sesión
+                    ¿Ya tenés cuenta? ¡Iniciá sesión!
                   </Link>
                 </div>
               </div>
@@ -267,15 +291,16 @@ function SignUpPage() {
               <div className="text-center">
                 <img
                   src="/signup.png"
-                  alt="Personas usando dispositivos móviles"
+                  alt="Personas usando GoChat"
                   className="w-full max-w-md h-auto object-contain mx-auto"
                 />
                 <div className="mt-6 text-center">
-                  <h3 className="text-xl font-medium text-cyan-400">Comienza tu viaje hoy</h3>
+                  <h3 className="text-xl font-medium text-cyan-400">Comenzá en GoChat hoy</h3>
                   <div className="mt-4 flex justify-center gap-3">
                     <span className="auth-badge bg-cyan-500/20 text-cyan-300">Gratis</span>
                     <span className="auth-badge bg-green-500/20 text-green-300">Fácil</span>
                     <span className="auth-badge bg-purple-500/20 text-purple-300">Privado</span>
+                    <span className="auth-badge bg-yellow-500/20 text-yellow-300">Personalizable</span>
                   </div>
                 </div>
               </div>

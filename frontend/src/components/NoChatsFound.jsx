@@ -10,16 +10,16 @@ function NoChatsFound() {
         <MessageCircleIcon className="w-8 h-8 text-cyan-400" />
       </div>
       <div>
-        <h4 className="text-slate-200 font-medium mb-1">Aún no hay conversaciones.</h4>
+        <h4 className="text-slate-200 font-medium mb-1">Vaya... Todavía no has hablado con nadie.</h4>
         <p className="text-slate-400 text-sm px-6">
-          Inicia un nuevo chat seleccionando un contacto de la pestaña de contactos.
+          Podés empezar a chatear seleccionando a un contacto de tu lista.
         </p>
       </div>
       <button
         onClick={() => setActiveTab("contacts")}
         className="px-4 py-2 text-sm text-cyan-400 bg-cyan-500/10 rounded-lg hover:bg-cyan-500/20 transition-colors"
       >
-        Encuentra contactos
+        Ver mis contactos
       </button>
     </div>
   );

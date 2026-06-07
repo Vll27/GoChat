@@ -2,14 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Tus propiedades CSS existentes */
+/* ==================== PROPIEDADES CSS PERSONALIZADAS ==================== */
 @property --border-angle {
   inherits: false;
   initial-value: 0deg;
   syntax: "<angle>";
 }
 
-/* Agregar estas nuevas clases para el layout */
+/* ==================== ESTILOS GLOBALES ==================== */
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  max-width: 100%;
+  position: relative;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ==================== LAYOUT PRINCIPAL ==================== */
 .layout-container {
   position: relative;
   width: 100%;
@@ -26,7 +44,7 @@
   height: 100%;
 }
 
-/* Tus estilos existentes... */
+/* ==================== COMPONENTES DE AUTENTICACIÓN ==================== */
 .input {
   @apply w-full bg-slate-800/50 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-slate-200 placeholder-slate-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent;
 }
@@ -44,16 +62,14 @@
 }
 
 .auth-btn {
-  @apply w-full bg-cyan-500 text-white rounded-lg py-2.5 font-medium
-  hover:bg-cyan-600 focus:ring-2 focus:ring-cyan-500;
+  @apply w-full bg-cyan-500 text-white rounded-lg py-2.5 font-medium hover:bg-cyan-600 focus:ring-2 focus:ring-cyan-500;
 }
 
 .auth-link {
-  @apply px-4 py-2 inline-block bg-cyan-500/10 rounded-lg text-cyan-400
-  hover:text-cyan-500 text-sm transition-colors;
+  @apply px-4 py-2 inline-block bg-cyan-500/10 rounded-lg text-cyan-400 hover:text-cyan-500 text-sm transition-colors;
 }
 
-/* NUEVOS ESTILOS RESPONSIVE */
+/* ==================== UTILIDADES RESPONSIVE ==================== */
 .h-95vh {
   height: 95vh;
 }
@@ -62,31 +78,72 @@
   max-height: 95vh;
 }
 
-/* Mobile optimizations */
-@media (max-width: 768px) {
-  .h-95vh {
-    height: 100vh;
-  }
-  
-  .max-h-95vh {
-    max-height: 100vh;
-  }
+/* ==================== SCROLL PERSONALIZADO ==================== */
+/* Scroll vertical para ChatList */
+.chat-list-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  height: 100%;
 }
 
-/* Ensure proper scrolling on mobile */
-@supports (-webkit-touch-callout: none) {
-  .h-95vh {
-    height: -webkit-fill-available;
-  }
+.chat-list-scroll::-webkit-scrollbar {
+  width: 6px;
 }
 
-/* Scrollbar personalizado */
+.chat-list-scroll::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.3);
+  border-radius: 3px;
+}
+
+.chat-list-scroll::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+  border-radius: 3px;
+}
+
+.chat-list-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+
+/* Scroll vertical para ChatContainer */
+.chat-container-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  height: 100%;
+}
+
+.chat-container-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-container-scroll::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.3);
+  border-radius: 3px;
+}
+
+.chat-container-scroll::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+  border-radius: 3px;
+}
+
+.chat-container-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+
+/* Scroll para elementos con overflow-y-auto */
+.overflow-y-auto {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .overflow-y-auto::-webkit-scrollbar {
   width: 6px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-track {
   background: rgba(30, 41, 59, 0.3);
+  border-radius: 3px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
@@ -96,4 +153,140 @@
 
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
   background: rgba(100, 116, 139, 0.7);
+}
+
+/* ==================== ESTILOS PARA MENSAJES ==================== */
+.break-words {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+.message-text {
+  word-break: break-word;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+/* ==================== ANIMACIONES EXISTENTES ==================== */
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes zoomIn {
+  0% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+@keyframes slideIn {
+  0% { transform: translateY(10px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.animate-zoom-in {
+  animation: zoomIn 0.15s ease-in-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.2s ease-in-out;
+}
+
+/* ==================== NUEVAS ANIMACIONES PARA MODALES (AGREGADO) ==================== */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 0.8s linear infinite;
+}
+
+/* ==================== ESTILOS PARA MODALES ==================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+}
+
+.modal-content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1001;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ==================== ESTILOS PARA KBD TAGS (AGREGADO) ==================== */
+kbd {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 10px;
+  line-height: 1;
+  background-color: rgb(51, 65, 85);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin: 0 2px;
+}
+
+/* ==================== UTILIDADES ADICIONALES ==================== */
+.flex, .inline-flex, .grid {
+  min-width: 0;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+.chat-container {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* ==================== MEDIA QUERIES ==================== */
+@media (max-width: 768px) {
+  .h-95vh {
+    height: 100vh;
+  }
+  
+  .max-h-95vh {
+    max-height: 100vh;
+  }
+  
+  .modal-content {
+    max-width: 95vw;
+    max-height: 95vh;
+  }
+}
+
+/* Soporte para iOS */
+@supports (-webkit-touch-callout: none) {
+  .h-95vh {
+    height: -webkit-fill-available;
+  }
+}
+
+/* ==================== FIX PARA EMOJI PICKER ==================== */
+div[style*="position: fixed"][style*="zIndex: 999999"] {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  overflow: visible !important;
 }
