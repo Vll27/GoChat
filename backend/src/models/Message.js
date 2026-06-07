@@ -28,23 +28,54 @@ const messageSchema = new mongoose.Schema(
       default: "sent",
       index: true,
     },
+    // NUEVOS CAMPOS PARA EDICIÓN
+    editedAt: {
+      type: Date,
+      default: null,
+    },
+    originalText: {
+      type: String,
+      default: null,
+    },
+    // NUEVOS CAMPOS PARA ELIMINACIÓN
+    deletedForEveryone: {
+      type: Boolean,
+      default: false,
+    },
+    deletedForEveryoneAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { 
     timestamps: true,
-    // ✅ Optimización para consultas frecuentes
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
   }
 );
 
-// ✅ Índices compuestos críticos
+// Virtual para saber si el mensaje fue editado
+messageSchema.virtual('isEdited').get(function() {
+  return this.editedAt !== null && this.editedAt !== undefined;
+});
+
+// Virtual para saber si el mensaje fue eliminado para todos
+messageSchema.virtual('isDeletedForEveryone').get(function() {
+  return this.deletedForEveryone === true;
+});
+
+// Índices compuestos críticos
 messageSchema.index({ senderId: 1, receiverId: 1, createdAt: -1 });
 messageSchema.index({ receiverId: 1, status: 1, createdAt: -1 });
 messageSchema.index({ createdAt: -1 });
 messageSchema.index({ senderId: 1, createdAt: -1 });
 messageSchema.index({ receiverId: 1, senderId: 1, status: 1 });
-
-// ✅ TTL index para limpiar mensajes viejos (opcional, 1 año)
+messageSchema.index({ deletedForEveryone: 1 });
 messageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 31536000 });
 
 const Message = mongoose.model("Message", messageSchema);

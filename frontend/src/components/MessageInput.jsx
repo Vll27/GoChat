@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useDebouncedCallback } from "use-debounce";
 import useKeyboardSound from "../hooks/useKeyboardSound";
 import { useChatStore } from "../store/useChatStore";
@@ -14,11 +15,26 @@ function MessageInput() {
   const fileInputRef = useRef(null);
   const textInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const emojiButtonRef = useRef(null);
+  const emojiPickerRef = useRef(null);
   
   const { sendMessage, isSoundEnabled } = useChatStore();
   const { sendTypingStart, sendTypingStop } = useMessageStatus();
 
-  // ✅ Debounced typing indicator (WhatsApp style)
+  // Cerrar emoji picker al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target) &&
+          emojiButtonRef.current && !emojiButtonRef.current.contains(event.target)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Debounced typing indicator (WhatsApp style)
   const debouncedTypingStart = useDebouncedCallback(() => {
     if (selectedUser) {
       sendTypingStart(selectedUser._id);
@@ -106,6 +122,17 @@ function MessageInput() {
     }
   };
 
+  const emojis = [
+    '😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰',
+    '😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🤩','🥳','😏',
+    '😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠',
+    '😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫','🤥',
+    '😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','😵','🤐',
+    '🥴','🤢','🤮','🤧','😷','🤒','🤕','🤑','🤠','👋','🤚','🖐️','✋','🖖','👌','🤌',
+    '🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','👊','✊',
+    '🤛','🤜','🤝','🙏','✍️','🤳','💪','❤️','🔥','🎉','✨','💀','⭐','🌙','⚡','🌈'
+  ];
+
   return (
     <div className="p-4 border-t border-slate-700/50 bg-gradient-to-r from-slate-900/50 to-slate-800/50 backdrop-blur-sm">
       {imagePreview && (
@@ -129,6 +156,7 @@ function MessageInput() {
 
       <form onSubmit={handleSendMessage} className="max-w-3xl mx-auto flex items-center gap-3">
         <button
+          ref={emojiButtonRef}
           type="button"
           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
           className="p-2 rounded-full bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition-all duration-200 hover:scale-110"
@@ -179,11 +207,31 @@ function MessageInput() {
         </div>
       </form>
 
-      {/* Emoji Picker simplificado - igual que antes pero con handleTyping */}
-      {showEmojiPicker && (
-        <div className="absolute bottom-20 left-4 z-50 bg-slate-800 rounded-xl shadow-2xl border border-slate-700 p-2 w-72">
-          <div className="grid grid-cols-8 gap-1 max-h-48 overflow-y-auto">
-            {['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🤩','🥳','😏','😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫','🤥','😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','😵','🤐','🥴','🤢','🤮','🤧','😷','🤒','🤕','🤑','🤠','👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','👊','✊','🤛','🤜','🤝','🙏','✍️','🤳','💪'].map((emoji) => (
+      {/* Emoji Picker usando Portal - se renderiza en el body */}
+      {showEmojiPicker && createPortal(
+        <div 
+          ref={emojiPickerRef}
+          className="bg-slate-800 rounded-xl shadow-2xl border border-slate-700 p-2"
+          style={{
+            position: 'fixed',
+            bottom: '80px',
+            left: '20px',
+            zIndex: 999999,
+            width: '340px',
+            maxWidth: 'calc(100vw - 40px)'
+          }}
+        >
+          <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-700">
+            <span className="text-xs text-slate-400">Emojis</span>
+            <button
+              onClick={() => setShowEmojiPicker(false)}
+              className="p-1 rounded-full hover:bg-slate-700"
+            >
+              <XIcon className="w-3 h-3 text-slate-400" />
+            </button>
+          </div>
+          <div className="grid grid-cols-8 gap-1 max-h-60 overflow-y-auto">
+            {emojis.map((emoji) => (
               <button
                 key={emoji}
                 type="button"
@@ -194,7 +242,8 @@ function MessageInput() {
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

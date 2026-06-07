@@ -294,3 +294,343 @@ export const markMessagesAsRead = async (req, res) => {
     res.status(500).json({ message: "Error del servidor" });
   }
 };
+
+// ==================== FUNCIONES PARA EDITAR Y ELIMINAR ====================
+
+export const getMessageInfo = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId)
+      .populate("senderId", "fullName email profilePic")
+      .populate("receiverId", "fullName email profilePic")
+      .lean();
+
+    if (!message) {
+      return res.status(404).json({ message: "Mensaje no encontrado" });
+    }
+
+    const isParticipant = message.senderId._id.toString() === userId.toString() ||
+                          message.receiverId._id.toString() === userId.toString();
+    
+    if (!isParticipant) {
+      return res.status(403).json({ message: "No autorizado" });
+    }
+
+    const messageInfo = {
+      _id: message._id,
+      text: message.text,
+      image: message.image,
+      status: message.status,
+      createdAt: message.createdAt,
+      editedAt: message.editedAt,
+      isEdited: message.editedAt !== null,
+      isDeleted: message.isDeleted,
+      sender: {
+        _id: message.senderId._id,
+        fullName: message.senderId.fullName,
+        email: message.senderId.email,
+        profilePic: message.senderId.profilePic,
+      },
+      receiver: {
+        _id: message.receiverId._id,
+        fullName: message.receiverId.fullName,
+        email: message.receiverId.email,
+        profilePic: message.receiverId.profilePic,
+      }
+    };
+
+    res.status(200).json(messageInfo);
+  } catch (error) {
+    console.error("Error en getMessageInfo:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const editMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { text } = req.body;
+    const userId = req.user._id;
+
+    if (!text || text.trim() === "") {
+      return res.status(400).json({ message: "El texto del mensaje es requerido" });
+    }
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Mensaje no encontrado" });
+    }
+
+    if (message.senderId.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "No puedes editar mensajes de otros usuarios" });
+    }
+
+    if (!message.originalText) {
+      message.originalText = message.text;
+    }
+
+    message.text = text.trim();
+    message.editedAt = new Date();
+    await message.save();
+
+    const receiverSocketId = getReceiverSocketId(message.receiverId.toString());
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("message_edited", {
+        messageId: message._id.toString(),
+        newText: message.text,
+        editedAt: message.editedAt,
+        isEdited: true
+      });
+    }
+
+    res.status(200).json({
+      message: "Mensaje editado exitosamente",
+      data: {
+        _id: message._id,
+        text: message.text,
+        editedAt: message.editedAt,
+        originalText: message.originalText
+      }
+    });
+  } catch (error) {
+    console.error("Error en editMessage:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const deleteMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { forEveryone } = req.query;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Mensaje no encontrado" });
+    }
+
+    const isSender = message.senderId.toString() === userId.toString();
+    const isReceiver = message.receiverId.toString() === userId.toString();
+
+    if (!isSender && !isReceiver) {
+      return res.status(403).json({ message: "No autorizado" });
+    }
+
+    if (forEveryone === 'true' || forEveryone === true) {
+      if (!isSender) {
+        return res.status(403).json({ message: "Solo el emisor puede eliminar el mensaje para todos" });
+      }
+      
+      message.isDeleted = true;
+      message.deletedAt = new Date();
+      message.text = "Mensaje eliminado";
+      message.image = null;
+      await message.save();
+
+      const receiverSocketId = getReceiverSocketId(message.receiverId.toString());
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("message_deleted", {
+          messageId: message._id.toString(),
+          deletedForEveryone: true
+        });
+      }
+    } else {
+      message.isDeleted = true;
+      message.deletedAt = new Date();
+      await message.save();
+    }
+
+    const senderSocketId = getReceiverSocketId(message.senderId.toString());
+    if (senderSocketId) {
+      io.to(senderSocketId).emit("message_deleted", {
+        messageId: message._id.toString(),
+        deletedForEveryone: forEveryone === 'true' || forEveryone === true
+      });
+    }
+
+    res.status(200).json({ 
+      message: "Mensaje eliminado exitosamente",
+      deletedForEveryone: forEveryone === 'true' || forEveryone === true
+    });
+  } catch (error) {
+    console.error("Error en deleteMessage:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const copyMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Mensaje no encontrado" });
+    }
+
+    console.log(`Usuario ${userId} copió mensaje ${messageId}`);
+    
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error en copyMessage:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+// ==================== FUNCIONES PARA REACCIONES ====================
+
+export const addReaction = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user._id;
+
+    if (!emoji) {
+      return res.status(400).json({ message: "El emoji es requerido" });
+    }
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Mensaje no encontrado" });
+    }
+
+    const existingReaction = message.reactions.find(
+      (r) => r.userId.toString() === userId.toString()
+    );
+
+    if (existingReaction) {
+      existingReaction.emoji = emoji;
+      existingReaction.createdAt = new Date();
+    } else {
+      message.reactions.push({
+        userId,
+        emoji,
+        createdAt: new Date(),
+      });
+    }
+
+    await message.save();
+
+    const populatedMessage = await Message.findById(messageId)
+      .populate("reactions.userId", "fullName email profilePic")
+      .lean();
+
+    const senderSocketId = getReceiverSocketId(message.senderId.toString());
+    const receiverSocketId = getReceiverSocketId(message.receiverId.toString());
+
+    const reactionData = {
+      messageId: message._id.toString(),
+      reactions: populatedMessage.reactions,
+    };
+
+    if (senderSocketId) {
+      io.to(senderSocketId).emit("message_reaction_updated", reactionData);
+    }
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("message_reaction_updated", reactionData);
+    }
+
+    res.status(200).json({
+      message: "Reacción agregada/actualizada",
+      reactions: populatedMessage.reactions,
+    });
+  } catch (error) {
+    console.error("Error en addReaction:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const removeReaction = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Mensaje no encontrado" });
+    }
+
+    message.reactions = message.reactions.filter(
+      (r) => r.userId.toString() !== userId.toString()
+    );
+
+    await message.save();
+
+    const populatedMessage = await Message.findById(messageId)
+      .populate("reactions.userId", "fullName email profilePic")
+      .lean();
+
+    const reactionData = {
+      messageId: message._id.toString(),
+      reactions: populatedMessage.reactions,
+    };
+
+    const senderSocketId = getReceiverSocketId(message.senderId.toString());
+    const receiverSocketId = getReceiverSocketId(message.receiverId.toString());
+
+    if (senderSocketId) {
+      io.to(senderSocketId).emit("message_reaction_updated", reactionData);
+    }
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("message_reaction_updated", reactionData);
+    }
+
+    res.status(200).json({
+      message: "Reacción eliminada",
+      reactions: populatedMessage.reactions,
+    });
+  } catch (error) {
+    console.error("Error en removeReaction:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const getMessageReactions = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId)
+      .populate("reactions.userId", "fullName email profilePic")
+      .lean();
+
+    if (!message) {
+      return res.status(404).json({ message: "Mensaje no encontrado" });
+    }
+
+    const isParticipant = message.senderId.toString() === userId.toString() ||
+                          message.receiverId.toString() === userId.toString();
+
+    if (!isParticipant) {
+      return res.status(403).json({ message: "No autorizado" });
+    }
+
+    const groupedReactions = {};
+    message.reactions.forEach((reaction) => {
+      if (!groupedReactions[reaction.emoji]) {
+        groupedReactions[reaction.emoji] = {
+          emoji: reaction.emoji,
+          count: 0,
+          users: [],
+        };
+      }
+      groupedReactions[reaction.emoji].count++;
+      groupedReactions[reaction.emoji].users.push({
+        userId: reaction.userId._id,
+        fullName: reaction.userId.fullName,
+        email: reaction.userId.email,
+        profilePic: reaction.userId.profilePic,
+      });
+    });
+
+    res.status(200).json({
+      reactions: message.reactions,
+      groupedReactions: Object.values(groupedReactions),
+    });
+  } catch (error) {
+    console.error("Error en getMessageReactions:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};

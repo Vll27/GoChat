@@ -6,7 +6,7 @@ import { MESSAGE_STATUS, shouldUpdateStatus } from '../utils/messageStatusUtils'
 
 export const useChatStore = create((set, get) => ({
   selectedUser: null,
-  messagesCache: {}, // { "userId1": [mensajes], "userId2": [mensajes] }
+  messagesCache: {},
   chats: [],
   allContacts: [],
   activeTab: 'chats',
@@ -64,13 +64,13 @@ export const useChatStore = create((set, get) => ({
     }
   },
   
-  // Obtener mensajes del usuario seleccionado
   getCurrentMessages: () => {
     const { selectedUser, messagesCache } = get();
     if (!selectedUser) return [];
     return messagesCache[selectedUser._id] || [];
   },
   
+  // ✅ CORREGIDA: Procesar mensajes con editedAt al cargar
   getMessagesByUserId: async (userId) => {
     if (!userId) return;
     
@@ -78,18 +78,30 @@ export const useChatStore = create((set, get) => ({
     try {
       const res = await axiosInstance.get(`/messages/${userId}`);
       
+      // Procesar cada mensaje para incluir campos de edición
+      const messagesWithMeta = res.data.map(msg => ({
+        ...msg,
+        createdAt: msg.createdAt || new Date().toISOString(),
+        editedAt: msg.editedAt || null,
+        isEdited: !!msg.editedAt,  // 👈 Calcular isEdited basado en editedAt
+        originalText: msg.originalText || null,
+        reactions: msg.reactions || [],
+        isDeleted: msg.isDeleted || false
+      }));
+      
       set((state) => ({
         messagesCache: {
           ...state.messagesCache,
-          [userId]: res.data
+          [userId]: messagesWithMeta
         }
       }));
       
-      console.log(`${res.data.length} mensajes cargados para usuario ${userId}`);
+      console.log(`${messagesWithMeta.length} mensajes cargados para usuario ${userId}`);
+      console.log(`📊 Mensajes editados en cache:`, messagesWithMeta.filter(m => m.isEdited).length);
       
       const { socket } = useAuthStore.getState();
       if (socket && socket.connected) {
-        const unreadMessages = res.data.filter(
+        const unreadMessages = messagesWithMeta.filter(
           msg => msg.senderId === userId && msg.status !== "read"
         );
         
@@ -126,7 +138,12 @@ export const useChatStore = create((set, get) => ({
       image: messageData.image || null,
       status: MESSAGE_STATUS.SENDING,
       createdAt: new Date().toISOString(),
-      isOptimistic: true
+      isOptimistic: true,
+      reactions: [],
+      editedAt: null,
+      isEdited: false,
+      originalText: null,
+      isDeleted: false
     };
     
     const currentMessages = messagesCache[selectedUser._id] || [];
@@ -158,7 +175,17 @@ export const useChatStore = create((set, get) => ({
         messagesCache: {
           ...state.messagesCache,
           [selectedUser._id]: state.messagesCache[selectedUser._id].map(msg =>
-            msg._id === tempId ? { ...res.data, isOptimistic: false, status: MESSAGE_STATUS.SENT } : msg
+            msg._id === tempId ? { 
+              ...res.data, 
+              isOptimistic: false, 
+              status: MESSAGE_STATUS.SENT, 
+              reactions: [],
+              createdAt: res.data.createdAt || new Date().toISOString(),
+              editedAt: null,
+              isEdited: false,
+              originalText: null,
+              isDeleted: false
+            } : msg
           )
         }
       }));
@@ -166,7 +193,7 @@ export const useChatStore = create((set, get) => ({
       set((state) => ({
         chats: state.chats.map(chat =>
           chat.user?._id === selectedUser._id
-            ? { ...chat, lastMessage: res.data }
+            ? { ...chat, lastMessage: { ...res.data, reactions: [] } }
             : chat
         )
       }));
@@ -293,7 +320,6 @@ export const useChatStore = create((set, get) => ({
     const { selectedUser, messagesCache } = get();
     const { authUser } = useAuthStore.getState();
     
-    // Determinar a que chat pertenece el mensaje
     const chatUserId = message.senderId === authUser?._id ? message.receiverId : message.senderId;
     
     if (!chatUserId) return;
@@ -305,11 +331,221 @@ export const useChatStore = create((set, get) => ({
       set((state) => ({
         messagesCache: {
           ...state.messagesCache,
-          [chatUserId]: [...(state.messagesCache[chatUserId] || []), message]
+          [chatUserId]: [...(state.messagesCache[chatUserId] || []), { 
+            ...message, 
+            reactions: message.reactions || [],
+            createdAt: message.createdAt || new Date().toISOString(),
+            editedAt: message.editedAt || null,
+            isEdited: !!message.editedAt,
+            originalText: message.originalText || null,
+            isDeleted: message.isDeleted || false
+          }]
         }
       }));
       console.log(`Mensaje agregado al cache para chat ${chatUserId}: ${message._id}`);
     }
+  },
+  
+  // ==================== FUNCIONES PARA EDITAR Y ELIMINAR ====================
+  
+  // ✅ CORREGIDA: Actualizar mensaje con editedAt
+  updateMessageText: (messageId, newText) => {
+    const { selectedUser, messagesCache } = get();
+    if (!selectedUser) return;
+    
+    const currentMessages = messagesCache[selectedUser._id] || [];
+    const editedAt = new Date().toISOString();
+    
+    const updatedMessages = currentMessages.map(msg =>
+      msg._id === messageId 
+        ? { 
+            ...msg, 
+            text: newText, 
+            editedAt: editedAt,
+            isEdited: true,
+            originalText: msg.originalText || msg.text
+          }
+        : msg
+    );
+    
+    set((state) => ({
+      messagesCache: {
+        ...state.messagesCache,
+        [selectedUser._id]: updatedMessages
+      }
+    }));
+    
+    console.log(`[STORE] Mensaje ${messageId} actualizado a: ${newText.substring(0, 50)}...`);
+  },
+  
+  deleteMessageFromCache: (messageId) => {
+    const { selectedUser, messagesCache } = get();
+    if (!selectedUser) return;
+    
+    const currentMessages = messagesCache[selectedUser._id] || [];
+    
+    set((state) => ({
+      messagesCache: {
+        ...state.messagesCache,
+        [selectedUser._id]: currentMessages.filter(msg => msg._id !== messageId)
+      }
+    }));
+    
+    console.log(`[STORE] Mensaje ${messageId} eliminado del cache`);
+  },
+  
+  // ==================== FUNCIONES PARA REACCIONES ====================
+  
+  updateMessageReactions: (messageId, reactions) => {
+    const { selectedUser, messagesCache } = get();
+    if (!selectedUser) return;
+    
+    const currentMessages = messagesCache[selectedUser._id] || [];
+    
+    set((state) => ({
+      messagesCache: {
+        ...state.messagesCache,
+        [selectedUser._id]: currentMessages.map(msg =>
+          msg._id === messageId 
+            ? { ...msg, reactions }
+            : msg
+        )
+      }
+    }));
+  },
+  
+  updateLastMessageReaction: (messageId, reactions) => {
+    const { chats } = get();
+    
+    const chatIndex = chats.findIndex(chat => chat.lastMessage?._id === messageId);
+    
+    if (chatIndex !== -1) {
+      const lastReaction = reactions?.length > 0 ? reactions[reactions.length - 1] : null;
+      
+      const updatedChats = [...chats];
+      updatedChats[chatIndex] = {
+        ...updatedChats[chatIndex],
+        lastMessage: {
+          ...updatedChats[chatIndex].lastMessage,
+          reactions,
+          lastReactionEmoji: lastReaction?.emoji || null,
+          lastReactionUser: lastReaction?.userId?._id || lastReaction?.userId || null
+        }
+      };
+      
+      set({ chats: updatedChats });
+      console.log(`[STORE] Chat ${chatIndex} actualizado con reacción ${lastReaction?.emoji}`);
+    }
+  },
+  
+  updateLastMessageDeleted: (messageId, deletedForEveryone) => {
+    const { chats } = get();
+    
+    const chatIndex = chats.findIndex(chat => chat.lastMessage?._id === messageId);
+    
+    if (chatIndex !== -1) {
+      const updatedChats = [...chats];
+      updatedChats[chatIndex] = {
+        ...updatedChats[chatIndex],
+        lastMessage: {
+          ...updatedChats[chatIndex].lastMessage,
+          text: "Mensaje eliminado",
+          image: null,
+          isDeleted: true,
+          deletedForEveryone
+        }
+      };
+      
+      set({ chats: updatedChats });
+      console.log(`[STORE] Chat ${chatIndex} marcado como eliminado`);
+    }
+  },
+  
+  setupMessageEditDeleteListeners: () => {
+    const { socket } = useAuthStore.getState();
+    if (!socket) return;
+    
+    socket.on("message_edited", ({ messageId, newText, editedAt }) => {
+      console.log(`[SOCKET] Mensaje ${messageId} editado: ${newText}`);
+      const { selectedUser, messagesCache } = get();
+      if (!selectedUser) return;
+      
+      const currentMessages = messagesCache[selectedUser._id] || [];
+      
+      set((state) => ({
+        messagesCache: {
+          ...state.messagesCache,
+          [selectedUser._id]: currentMessages.map(msg =>
+            msg._id === messageId 
+              ? { ...msg, text: newText, editedAt, isEdited: true }
+              : msg
+          )
+        }
+      }));
+    });
+    
+    socket.on("message_deleted", ({ messageId, deletedForEveryone }) => {
+      console.log(`[SOCKET] Mensaje ${messageId} eliminado, paraTodos: ${deletedForEveryone}`);
+      const { selectedUser, messagesCache } = get();
+      if (!selectedUser) return;
+      
+      const currentMessages = messagesCache[selectedUser._id] || [];
+      
+      if (deletedForEveryone) {
+        set((state) => ({
+          messagesCache: {
+            ...state.messagesCache,
+            [selectedUser._id]: currentMessages.map(msg =>
+              msg._id === messageId 
+                ? { ...msg, text: "Mensaje eliminado", image: null, isDeleted: true }
+                : msg
+            )
+          }
+        }));
+      } else {
+        // Eliminar solo para mí
+        set((state) => ({
+          messagesCache: {
+            ...state.messagesCache,
+            [selectedUser._id]: currentMessages.filter(msg => msg._id !== messageId)
+          }
+        }));
+      }
+      
+      get().updateLastMessageDeleted(messageId, deletedForEveryone);
+    });
+    
+    socket.on("message_edit_confirmed", ({ messageId, newText, editedAt }) => {
+      console.log(`[SOCKET] Confirmacion de edicion: ${messageId}`);
+    });
+    
+    socket.on("message_delete_confirmed", ({ messageId, deletedForEveryone }) => {
+      console.log(`[SOCKET] Confirmacion de eliminacion: ${messageId}`);
+    });
+  },
+  
+  setupMessageReactionListeners: () => {
+    const { socket } = useAuthStore.getState();
+    if (!socket) return;
+    
+    socket.on("message_reaction_updated", ({ messageId, reactions }) => {
+      console.log(`[SOCKET] Reacciones actualizadas para mensaje ${messageId}`);
+      
+      const { selectedUser, messagesCache } = get();
+      if (selectedUser) {
+        const currentMessages = messagesCache[selectedUser._id] || [];
+        set((state) => ({
+          messagesCache: {
+            ...state.messagesCache,
+            [selectedUser._id]: currentMessages.map(msg =>
+              msg._id === messageId ? { ...msg, reactions } : msg
+            )
+          }
+        }));
+      }
+      
+      get().updateLastMessageReaction(messageId, reactions);
+    });
   },
   
   subscribeToMessages: () => {
@@ -320,6 +556,9 @@ export const useChatStore = create((set, get) => ({
     }
     
     console.log("Configurando suscripcion a eventos de mensajes...");
+    
+    get().setupMessageEditDeleteListeners();
+    get().setupMessageReactionListeners();
     
     socket.off("newMessage");
     socket.off("message_status_updated");
@@ -356,10 +595,21 @@ export const useChatStore = create((set, get) => ({
       console.log(`Enviando ACK para mensaje ${newMessage._id}`);
       socket.emit("message_received_ack", { messageId: newMessage._id });
       
+      // Asegurar que el nuevo mensaje tenga todos los campos necesarios
+      const messageWithMeta = {
+        ...newMessage,
+        reactions: newMessage.reactions || [],
+        createdAt: newMessage.createdAt || new Date().toISOString(),
+        editedAt: null,
+        isEdited: false,
+        originalText: null,
+        isDeleted: false
+      };
+      
       set((state) => ({
         messagesCache: {
           ...state.messagesCache,
-          [chatUserId]: [...(state.messagesCache[chatUserId] || []), newMessage]
+          [chatUserId]: [...(state.messagesCache[chatUserId] || []), messageWithMeta]
         }
       }));
       
@@ -372,7 +622,7 @@ export const useChatStore = create((set, get) => ({
         
         updatedChats[chatIndex] = {
           ...updatedChats[chatIndex],
-          lastMessage: newMessage,
+          lastMessage: messageWithMeta,
           unreadCount: newUnreadCount,
           updatedAt: new Date()
         };
@@ -467,10 +717,20 @@ export const useChatStore = create((set, get) => ({
           console.log(`Enviando ACK para mensaje pendiente: ${msg._id}`);
           socket.emit("message_received_ack", { messageId: msg._id });
           
+          const messageWithMeta = {
+            ...msg,
+            reactions: msg.reactions || [],
+            createdAt: msg.createdAt || new Date().toISOString(),
+            editedAt: null,
+            isEdited: false,
+            originalText: null,
+            isDeleted: false
+          };
+          
           set((state) => ({
             messagesCache: {
               ...state.messagesCache,
-              [chatUserId]: [...(state.messagesCache[chatUserId] || []), msg]
+              [chatUserId]: [...(state.messagesCache[chatUserId] || []), messageWithMeta]
             }
           }));
           
@@ -498,6 +758,9 @@ export const useChatStore = create((set, get) => ({
     socket.off("message_delivered_ack");
     socket.off("chat_marked_read");
     socket.off("pending_messages_batch");
+    socket.off("message_edited");
+    socket.off("message_deleted");
+    socket.off("message_reaction_updated");
     
     console.log("Desuscrito de eventos de mensajes");
   },

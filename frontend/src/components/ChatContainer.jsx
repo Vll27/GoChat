@@ -1,19 +1,36 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoreVertical } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import { useConfigStore } from "../store/useConfigStore";
 import useMessageStatus from "../hooks/useMessageStatus";
+import useMessageActions from "../hooks/useMessageActions";
+import useMessageReactions from "../hooks/useMessageReactions";
 import ChatHeader from "./ChatHeader";
 import NoChatHistoryPlaceholder from "./NoChatHistoryPlaceholder";
 import MessageInput from "./MessageInput";
 import MessagesLoadingSkeleton from "./MessagesLoadingSkeleton";
 import MessageStatusIcon from "./MessageStatusIcon";
+import MessageReactions from "./MessageReactions";
+import EmojiPickerButton from "./EmojiPickerButton";
+import MessageContextMenu from "./MessageContextMenu";
+import MessageInfoModal from "./MessageInfoModal";
+import EditMessageModal from "./EditMessageModal";
+import toast from "react-hot-toast";
 
 function ChatContainer() {
   const [selectedImg, setSelectedImg] = useState(null);
   const [selectedImgIndex, setSelectedImgIndex] = useState(-1);
   const [isImageModalVisible, setIsImageModalVisible] = useState(false);
+  
+  const [contextMenu, setContextMenu] = useState(null);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedMessageInfo, setSelectedMessageInfo] = useState(null);
+  
+  // 👇 NUEVO: Guardar el mensaje a editar antes de cerrar el menú
+  const [pendingEditMessage, setPendingEditMessage] = useState(null);
   
   const {
     selectedUser,
@@ -26,6 +43,8 @@ function ChatContainer() {
   const { authUser, socket } = useAuthStore();
   const { chatWallpaper, themeColor, receiverColor, isTextBold, chatFontSize } = useConfigStore();
   const { sendMessageRead, sendChatOpened } = useMessageStatus();
+  const { copyMessageText, getMessageInfo, editMessage, deleteMessage, canEditMessage } = useMessageActions();
+  const { addReaction, removeReaction, getUserReaction, availableEmojis } = useMessageReactions();
   
   const messageEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
@@ -33,11 +52,162 @@ function ChatContainer() {
   const chatOpenedSent = useRef(false);
   const lastSelectedUserId = useRef(null);
 
-  // Obtener mensajes del chat actual desde el cache
   const messages = selectedUser ? (messagesCache[selectedUser._id] || []) : [];
   const imageMessages = messages.filter((message) => message.image);
 
-  // Marcar como leido al abrir el chat
+  // Abrir menú contextual desde el botón
+  const openMenu = (e, message) => {
+    e.stopPropagation();
+    if (message.isDeleted || message.text === "Mensaje eliminado") return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    
+    setSelectedMessage(message);
+    setContextMenu({
+      x: rect.right - 20,
+      y: rect.top + rect.height / 2,
+      messageRect: rect
+    });
+  };
+
+  // MODIFICADO: Cierre del menú sin limpiar selectedMessage inmediatamente
+  const closeContextMenu = () => {
+    setContextMenu(null);
+    // ✅ No limpiar selectedMessage aquí para que el modal pueda usarlo
+  };
+
+  // ==================== ACCIONES DEL MENÚ ====================
+
+  const handleCopy = async (text) => {
+    await copyMessageText(text, selectedMessage?._id);
+    closeContextMenu();
+    setTimeout(() => setSelectedMessage(null), 100);
+  };
+
+  const handleInfo = async () => {
+    const info = await getMessageInfo(selectedMessage?._id);
+    setSelectedMessageInfo(info);
+    setShowInfoModal(true);
+    closeContextMenu();
+    setTimeout(() => setSelectedMessage(null), 100);
+  };
+
+  // ✅ CORREGIDO: Guardar el mensaje antes de cerrar el menú
+  const handleEdit = () => {
+    if (!selectedMessage) return;
+    
+    if (!canEditMessage(selectedMessage)) {
+      toast.error("Solo puedes editar mensajes enviados en los últimos 5 minutos");
+      closeContextMenu();
+      setTimeout(() => setSelectedMessage(null), 100);
+      return;
+    }
+    
+    // Guardar una copia del mensaje antes de cerrar el menú
+    const messageToEdit = selectedMessage;
+    
+    // Cerrar el menú
+    setContextMenu(null);
+    
+    // Abrir el modal con el mensaje guardado
+    setTimeout(() => {
+      setPendingEditMessage(messageToEdit);
+      setShowEditModal(true);
+    }, 10);
+  };
+
+  const handleDelete = async () => {
+    const messageId = selectedMessage?._id;
+    closeContextMenu();
+    setTimeout(() => setSelectedMessage(null), 100);
+    await deleteMessage(messageId, false);
+  };
+
+  const handleDeleteForEveryone = async () => {
+    const messageId = selectedMessage?._id;
+    closeContextMenu();
+    setTimeout(() => setSelectedMessage(null), 100);
+    await deleteMessage(messageId, true);
+  };
+
+  // ✅ CORREGIDO: Usar pendingEditMessage en lugar de selectedMessage
+  const handleSaveEdit = async (newText) => {
+    if (!pendingEditMessage) return;
+    
+    if (!canEditMessage(pendingEditMessage)) {
+      toast.error("El tiempo para editar este mensaje ha expirado");
+      setShowEditModal(false);
+      setPendingEditMessage(null);
+      setSelectedMessage(null);
+      return;
+    }
+    
+    const success = await editMessage(pendingEditMessage._id, newText, pendingEditMessage?.text);
+    
+    setShowEditModal(false);
+    
+    setTimeout(() => {
+      setPendingEditMessage(null);
+      setSelectedMessage(null);
+    }, 100);
+    
+    if (success) {
+      toast.success("Mensaje editado correctamente");
+      setTimeout(() => {
+        const messageEnd = document.getElementById('message-end');
+        messageEnd?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  };
+
+  const handleReply = () => {
+    toast.success(`Respondiendo a: ${selectedMessage?.text?.substring(0, 30)}...`);
+    closeContextMenu();
+    setTimeout(() => setSelectedMessage(null), 100);
+  };
+
+  const handleForward = () => {
+    toast.info("Función de reenviar en desarrollo");
+    closeContextMenu();
+    setTimeout(() => setSelectedMessage(null), 100);
+  };
+
+  const handlePin = () => {
+    toast.info("Función de fijar en desarrollo");
+    closeContextMenu();
+    setTimeout(() => setSelectedMessage(null), 100);
+  };
+
+  const handleStar = () => {
+    toast.info("Función de destacar en desarrollo");
+    closeContextMenu();
+    setTimeout(() => setSelectedMessage(null), 100);
+  };
+
+  const handleSelect = () => {
+    toast.info("Función de seleccionar en desarrollo");
+    closeContextMenu();
+    setTimeout(() => setSelectedMessage(null), 100);
+  };
+
+  const handleReport = () => {
+    toast.info("Función de reportar en desarrollo");
+    closeContextMenu();
+    setTimeout(() => setSelectedMessage(null), 100);
+  };
+
+  // ==================== REACCIONES ====================
+
+  const handleAddReaction = async (messageId, emoji) => {
+    await addReaction(messageId, emoji);
+  };
+
+  const handleRemoveReaction = async (messageId) => {
+    await removeReaction(messageId);
+  };
+
+  // ==================== EFECTOS ====================
+
   useEffect(() => {
     if (selectedUser && selectedUser._id && socket && socket.connected) {
       if (lastSelectedUserId.current === selectedUser._id && chatOpenedSent.current) {
@@ -61,13 +231,8 @@ function ChatContainer() {
       sendChatOpened(selectedUser._id);
       chatOpenedSent.current = true;
     }
-    
-    return () => {
-      // No desuscribir nada aqui
-    };
   }, [selectedUser, socket, messages, updateMessageStatus, sendChatOpened]);
 
-  // Escuchar visibilidad de la pagina
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && selectedUser && socket && socket.connected && chatOpenedSent.current) {
@@ -80,7 +245,6 @@ function ChatContainer() {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [selectedUser, socket, sendChatOpened]);
 
-  // Cargar mensajes al seleccionar usuario
   useEffect(() => {
     if (selectedUser && selectedUser._id) {
       console.log("Cargando mensajes para:", selectedUser.fullName);
@@ -90,7 +254,6 @@ function ChatContainer() {
     }
   }, [selectedUser, getMessagesByUserId]);
 
-  // Auto-scroll optimizado
   useEffect(() => {
     const scrollToBottom = () => {
       if (messageEndRef.current && messagesContainerRef.current) {
@@ -154,9 +317,13 @@ function ChatContainer() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedImg, selectedImgIndex]);
 
+  const isMessageDeleted = (msg) => {
+    return msg.isDeleted || msg.text === "Mensaje eliminado";
+  };
+
   return (
     <div 
-      className="flex flex-col h-full w-full relative transition-all duration-300"
+      className="flex flex-col h-full w-full relative transition-all duration-300 overflow-x-hidden"
       style={{
         backgroundImage: chatWallpaper ? `url(${chatWallpaper})` : "none",
         backgroundSize: "cover",
@@ -168,62 +335,114 @@ function ChatContainer() {
         <div className="absolute inset-0 bg-black/40 pointer-events-none z-0" />
       )}
 
-      <div className="relative z-10 flex flex-col h-full w-full min-h-0">
+      <div className="relative z-10 flex flex-col h-full w-full min-h-0 overflow-x-hidden">
         <ChatHeader />
         
         <div 
-          ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto w-full min-h-0 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800"
-        >
+            ref={messagesContainerRef}
+            className="flex-1 chat-container-scroll w-full min-h-0"
+          >
           {messages.length > 0 && !isMessagesLoading ? (
-            <div className="w-full min-h-full flex flex-col justify-end">
-              <div className="w-full p-2 md:p-4 space-y-3">
-                {messages.map((msg) => (
-                  <div
-                    key={msg._id || `temp-${msg.createdAt}-${msg.text}`}
-                    className={`flex ${msg.senderId === authUser._id ? "justify-end" : "justify-start"}`}
-                  >
+            <div className="w-full min-h-full flex flex-col justify-end overflow-x-hidden">
+              <div className="w-full p-2 md:p-4 space-y-3 overflow-x-hidden">
+                {messages.map((msg) => {
+                  const isDeleted = isMessageDeleted(msg);
+                  const isOwnMessage = msg.senderId?.toString() === authUser._id?.toString();
+                  const userReaction = getUserReaction(msg.reactions, authUser._id);
+                  
+                  return (
                     <div
-                      className={`max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl rounded-2xl px-4 py-3 shadow-md ${
-                        msg.senderId === authUser._id
-                          ? "text-white rounded-br-none"
-                          : "text-slate-100 rounded-bl-none border border-slate-700/20"
-                      }`}
-                      style={{
-                        backgroundColor: msg.senderId === authUser._id ? themeColor || "#06b6d4" : receiverColor || "#1e293b",
-                        fontWeight: isTextBold ? "700" : "400",
-                        fontSize: `${chatFontSize || 16}px`,
-                      }}
+                      key={msg._id + (msg.isEdited ? '-edited-' + msg.editedAt : '')}
+                      className={`group relative flex ${isOwnMessage ? "justify-end" : "justify-start"} items-center gap-2 overflow-x-hidden`}
                     >
-                      {msg.image && (
-                        <button
-                          type="button"
-                          onClick={() => openImageModal(msg.image, imageMessages.findIndex(img => img._id === msg._id))}
-                          className="block mb-2 rounded-lg overflow-hidden max-w-full"
-                        >
-                          <img 
-                            src={msg.image} 
-                            alt="Imagen enviada" 
-                            className="rounded-lg max-w-full h-auto object-cover max-h-64 hover:opacity-90 transition-opacity cursor-zoom-in" 
+                      {/* Botón de reacción flotante */}
+                      {!isDeleted && (
+                        <div className={`${isOwnMessage ? 'order-first' : 'order-last'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                          <EmojiPickerButton
+                            onEmojiSelect={(emoji) => handleAddReaction(msg._id, emoji)}
+                            currentEmoji={userReaction}
+                            size="sm"
                           />
-                        </button>
+                        </div>
                       )}
                       
-                      {msg.text && (
-                        <p className="break-words whitespace-pre-wrap text-base leading-relaxed">
-                          {msg.text}
-                        </p>
-                      )}
-                      
-                      <div className={`text-xs mt-2 opacity-75 flex items-center gap-1 ${msg.senderId === authUser._id ? "justify-end" : "justify-start"}`}>
-                        <span>{formatMessageTime(msg.createdAt)}</span>
-                        {msg.senderId === authUser._id && msg.status && (
-                          <MessageStatusIcon status={msg.status} />
+                      {/* Burbuja de mensaje */}
+                      <div
+                        className={`relative max-w-[85%] sm:max-w-[75%] md:max-w-[65%] lg:max-w-[55%] rounded-2xl px-4 py-3 shadow-md break-words ${
+                          isOwnMessage
+                            ? "text-white rounded-br-none"
+                            : "text-slate-100 rounded-bl-none border border-slate-700/20"
+                        } ${isDeleted ? 'opacity-60' : ''}`}
+                        style={{
+                          backgroundColor: isOwnMessage ? themeColor || "#06b6d4" : receiverColor || "#1e293b",
+                          fontWeight: isTextBold ? "700" : "400",
+                          fontSize: `${chatFontSize || 16}px`,
+                        }}
+                      >
+                        {msg.image && !isDeleted && (
+                          <button
+                            type="button"
+                            onClick={() => openImageModal(msg.image, imageMessages.findIndex(img => img._id === msg._id))}
+                            className="block mb-2 rounded-lg overflow-hidden max-w-full"
+                          >
+                            <img 
+                              src={msg.image} 
+                              alt="Imagen enviada" 
+                              className="rounded-lg max-w-full h-auto object-cover max-h-64 hover:opacity-90 transition-opacity cursor-zoom-in" 
+                            />
+                          </button>
+                        )}
+                        
+                        {msg.text && (
+                          <p className={`break-words whitespace-pre-wrap text-base leading-relaxed w-full ${isDeleted ? 'italic' : ''}`}>
+                            {isDeleted ? "Mensaje eliminado" : msg.text}
+                          </p>
+                        )}
+                        
+                        {msg.isEdited && !isDeleted && (
+                          <span 
+                            className="text-[10px] opacity-60 ml-1 inline-flex items-center gap-0.5"
+                            title={`Editado ${formatMessageTime(msg.editedAt)}`}
+                          >
+                            (editado)
+                          </span>
+                        )}
+                        
+                        <div className={`text-xs mt-2 opacity-75 flex items-center gap-1 flex-wrap ${isOwnMessage ? "justify-end" : "justify-start"}`}>
+                          <span>{formatMessageTime(msg.createdAt)}</span>
+                          {isOwnMessage && msg.status && !isDeleted && (
+                            <MessageStatusIcon status={msg.status} />
+                          )}
+                        </div>
+                        
+                        {/* Reacciones debajo del mensaje */}
+                        {msg.reactions && msg.reactions.length > 0 && !isDeleted && (
+                          <MessageReactions
+                            reactions={msg.reactions}
+                            onAddReaction={(emoji) => handleAddReaction(msg._id, emoji)}
+                            onRemoveReaction={() => handleRemoveReaction(msg._id)}
+                            currentUserId={authUser._id}
+                            availableEmojis={availableEmojis}
+                            isOwnMessage={isOwnMessage}
+                          />
                         )}
                       </div>
+                      
+                      {/* Botón de menú (tres puntos) */}
+                      {!isDeleted && (
+                        <button
+                          onClick={(e) => openMenu(e, msg)}
+                          className={`p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-slate-700 ${
+                            isOwnMessage ? 'order-last' : 'order-first'
+                          }`}
+                          title="Opciones"
+                        >
+                          <MoreVertical className="w-4 h-4 text-slate-400" />
+                        </button>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <div ref={messageEndRef} className="h-4" />
               </div>
             </div>
@@ -237,7 +456,7 @@ function ChatContainer() {
         <MessageInput />
       </div>
 
-      {/* Image Modal */}
+      {/* Modal de imagen */}
       {selectedImg && (
         <div
           className={`fixed inset-0 z-[999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-200 ${
@@ -280,6 +499,52 @@ function ChatContainer() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Menú contextual */}
+      {contextMenu && selectedMessage && (
+        <MessageContextMenu
+          message={selectedMessage}
+          position={contextMenu}
+          onClose={closeContextMenu}
+          onCopy={handleCopy}
+          onInfo={handleInfo}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onDeleteForEveryone={handleDeleteForEveryone}
+          onReply={handleReply}
+          onForward={handleForward}
+          onPin={handlePin}
+          onStar={handleStar}
+          onSelect={handleSelect}
+          onReport={handleReport}
+          isSender={selectedMessage?.senderId?.toString() === authUser._id?.toString()}
+          isGroup={false}
+        />
+      )}
+
+      {/* Modal de información */}
+      {showInfoModal && selectedMessageInfo && (
+        <MessageInfoModal
+          message={selectedMessageInfo}
+          onClose={() => {
+            setShowInfoModal(false);
+            setSelectedMessageInfo(null);
+          }}
+        />
+      )}
+
+      {/* Modal de edición - ✅ USAR pendingEditMessage */}
+      {showEditModal && pendingEditMessage && (
+        <EditMessageModal
+          message={pendingEditMessage}
+          onSave={handleSaveEdit}
+          onClose={() => {
+            setShowEditModal(false);
+            setPendingEditMessage(null);
+            setSelectedMessage(null);
+          }}
+        />
       )}
     </div>
   );

@@ -189,8 +189,6 @@ io.on("connection", async (socket) => {
       
       console.log(`[ACK] Mensaje encontrado - sender: ${message.senderId}, receiver: ${message.receiverId}, current status: ${message.status}`);
       
-      // Actualizar a delivered SIEMPRE que el estado sea "sent"
-      // No importa si el receptor tiene otro chat abierto
       if (message.status === "sent") {
         message.status = "delivered";
         await message.save();
@@ -269,6 +267,204 @@ io.on("connection", async (socket) => {
       }
     } catch (error) {
       console.error("Error en chat_opened:", error);
+    }
+  });
+
+  // ==================== EVENTOS PARA EDITAR Y ELIMINAR ====================
+
+  socket.on("edit_message", async ({ messageId, newText }) => {
+    try {
+      console.log(`[EDIT] Usuario ${socket.userId} editando mensaje ${messageId}`);
+      
+      const message = await Message.findById(messageId);
+      if (!message) {
+        console.log(`[EDIT] Mensaje ${messageId} no encontrado`);
+        return;
+      }
+      
+      if (message.senderId.toString() !== socket.userId) {
+        console.log(`[EDIT] Usuario no autorizado para editar mensaje ${messageId}`);
+        return;
+      }
+      
+      if (!message.originalText) {
+        message.originalText = message.text;
+      }
+      
+      message.text = newText;
+      message.editedAt = new Date();
+      await message.save();
+      
+      const receiverSocketId = getReceiverSocketId(message.receiverId.toString());
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("message_edited", {
+          messageId: message._id.toString(),
+          newText: message.text,
+          editedAt: message.editedAt
+        });
+        console.log(`[EDIT] Evento message_edited enviado a receptor ${message.receiverId}`);
+      }
+      
+      socket.emit("message_edit_confirmed", {
+        messageId: message._id.toString(),
+        newText: message.text,
+        editedAt: message.editedAt
+      });
+      
+    } catch (error) {
+      console.error("[EDIT] Error:", error);
+    }
+  });
+
+  socket.on("delete_message", async ({ messageId, forEveryone = false }) => {
+    try {
+      console.log(`[DELETE] Usuario ${socket.userId} eliminando mensaje ${messageId}, paraTodos: ${forEveryone}`);
+      
+      const message = await Message.findById(messageId);
+      if (!message) {
+        console.log(`[DELETE] Mensaje ${messageId} no encontrado`);
+        return;
+      }
+      
+      const isSender = message.senderId.toString() === socket.userId;
+      const isReceiver = message.receiverId.toString() === socket.userId;
+      
+      if (!isSender && !isReceiver) {
+        console.log(`[DELETE] Usuario no autorizado`);
+        return;
+      }
+      
+      if (forEveryone && !isSender) {
+        console.log(`[DELETE] Solo el emisor puede eliminar para todos`);
+        return;
+      }
+      
+      if (forEveryone) {
+        message.isDeleted = true;
+        message.deletedAt = new Date();
+        message.text = "Mensaje eliminado";
+        message.image = null;
+        await message.save();
+        
+        const receiverSocketId = getReceiverSocketId(message.receiverId.toString());
+        if (receiverSocketId) {
+          io.to(receiverSocketId).emit("message_deleted", {
+            messageId: message._id.toString(),
+            deletedForEveryone: true
+          });
+          console.log(`[DELETE] Evento message_deleted enviado a receptor ${message.receiverId}`);
+        }
+      } else {
+        // Eliminar solo para mí - marcamos isDeleted pero no cambiamos el texto para el otro usuario
+        message.isDeleted = true;
+        message.deletedAt = new Date();
+        await message.save();
+      }
+      
+      socket.emit("message_delete_confirmed", {
+        messageId: message._id.toString(),
+        deletedForEveryone: forEveryone
+      });
+      
+    } catch (error) {
+      console.error("[DELETE] Error:", error);
+    }
+  });
+
+  // ==================== EVENTOS PARA REACCIONES ====================
+
+  socket.on("react_to_message", async ({ messageId, emoji }) => {
+    try {
+      console.log(`[REACTION] Usuario ${socket.userId} reaccionando a mensaje ${messageId} con ${emoji}`);
+      
+      const message = await Message.findById(messageId);
+      if (!message) {
+        console.log(`[REACTION] Mensaje ${messageId} no encontrado`);
+        return;
+      }
+      
+      const existingReaction = message.reactions.find(
+        (r) => r.userId.toString() === socket.userId
+      );
+      
+      if (existingReaction) {
+        existingReaction.emoji = emoji;
+        existingReaction.createdAt = new Date();
+      } else {
+        message.reactions.push({
+          userId: socket.userId,
+          emoji,
+          createdAt: new Date(),
+        });
+      }
+      
+      await message.save();
+      
+      const updatedMessage = await Message.findById(messageId)
+        .populate("reactions.userId", "fullName email profilePic")
+        .lean();
+      
+      const reactionData = {
+        messageId: message._id.toString(),
+        reactions: updatedMessage.reactions,
+      };
+      
+      const senderSocketId = getReceiverSocketId(message.senderId.toString());
+      const receiverSocketId = getReceiverSocketId(message.receiverId.toString());
+      
+      if (senderSocketId) {
+        io.to(senderSocketId).emit("message_reaction_updated", reactionData);
+      }
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("message_reaction_updated", reactionData);
+      }
+      
+      console.log(`[REACTION] Reacción actualizada para mensaje ${messageId}`);
+      
+    } catch (error) {
+      console.error("[REACTION] Error:", error);
+    }
+  });
+
+  socket.on("remove_reaction", async ({ messageId }) => {
+    try {
+      console.log(`[REACTION] Usuario ${socket.userId} eliminando reacción de mensaje ${messageId}`);
+      
+      const message = await Message.findById(messageId);
+      if (!message) {
+        console.log(`[REACTION] Mensaje ${messageId} no encontrado`);
+        return;
+      }
+      
+      message.reactions = message.reactions.filter(
+        (r) => r.userId.toString() !== socket.userId
+      );
+      
+      await message.save();
+      
+      const updatedMessage = await Message.findById(messageId)
+        .populate("reactions.userId", "fullName email profilePic")
+        .lean();
+      
+      const reactionData = {
+        messageId: message._id.toString(),
+        reactions: updatedMessage.reactions,
+      };
+      
+      const senderSocketId = getReceiverSocketId(message.senderId.toString());
+      const receiverSocketId = getReceiverSocketId(message.receiverId.toString());
+      
+      if (senderSocketId) {
+        io.to(senderSocketId).emit("message_reaction_updated", reactionData);
+      }
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("message_reaction_updated", reactionData);
+      }
+      
+      console.log(`[REACTION] Reacción eliminada del mensaje ${messageId}`);
+      
+    } catch (error) {
+      console.error("[REACTION] Error:", error);
     }
   });
 
