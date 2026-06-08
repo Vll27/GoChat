@@ -13,10 +13,21 @@ export const useChatStore = create((set, get) => ({
   isUsersLoading: false,
   isMessagesLoading: false,
   messageInputText: '',
+  messagesPagination: {},
+  isSoundEnabled: true, // 👈 ESTADO DEL SONIDO
 
   setActiveTab: (tab) => {
     set({ activeTab: tab });
     console.log(`Pestana cambiada a: ${tab}`);
+  },
+
+  // 👈 FUNCIÓN PARA ACTIVAR/DESACTIVAR SONIDO
+  toggleSound: () => {
+    set((state) => {
+      const newState = !state.isSoundEnabled;
+      console.log(`🔊 Sonido ${newState ? 'activado' : 'desactivado'}`);
+      return { isSoundEnabled: newState };
+    });
   },
 
   getMyChatPartners: async () => {
@@ -70,37 +81,62 @@ export const useChatStore = create((set, get) => ({
     return messagesCache[selectedUser._id] || [];
   },
   
-  // ✅ CORREGIDA: Procesar mensajes con editedAt al cargar
-  getMessagesByUserId: async (userId) => {
+  getMessagesByUserId: async (userId, isLoadingMore = false) => {
     if (!userId) return;
     
-    set({ isMessagesLoading: true });
+    if (isLoadingMore && get().isMessagesLoading) return;
+    
+    if (!isLoadingMore) {
+      set({ isMessagesLoading: true });
+    }
+    
     try {
-      const res = await axiosInstance.get(`/messages/${userId}`);
+      const pagination = get().messagesPagination[userId] || {};
+      const before = isLoadingMore ? pagination.nextCursor : null;
+      const limit = 20;
       
-      // Procesar cada mensaje para incluir campos de edición
-      const messagesWithMeta = res.data.map(msg => ({
+      const url = before 
+        ? `/messages/${userId}?limit=${limit}&before=${before}`
+        : `/messages/${userId}?limit=${limit}`;
+      
+      const res = await axiosInstance.get(url);
+      
+      const messagesWithMeta = res.data.messages.map(msg => ({
         ...msg,
         createdAt: msg.createdAt || new Date().toISOString(),
         editedAt: msg.editedAt || null,
-        isEdited: !!msg.editedAt,  // 👈 Calcular isEdited basado en editedAt
+        isEdited: !!msg.editedAt,
         originalText: msg.originalText || null,
         reactions: msg.reactions || [],
         isDeleted: msg.isDeleted || false
       }));
       
-      set((state) => ({
-        messagesCache: {
-          ...state.messagesCache,
-          [userId]: messagesWithMeta
-        }
-      }));
+      set((state) => {
+        const existingMessages = state.messagesCache[userId] || [];
+        const updatedMessages = isLoadingMore
+          ? [...messagesWithMeta, ...existingMessages]
+          : messagesWithMeta;
+          
+        return {
+          messagesCache: {
+            ...state.messagesCache,
+            [userId]: updatedMessages
+          },
+          messagesPagination: {
+            ...state.messagesPagination,
+            [userId]: {
+              hasMore: res.data.hasMore,
+              nextCursor: res.data.nextCursor
+            }
+          },
+          isMessagesLoading: false
+        };
+      });
       
       console.log(`${messagesWithMeta.length} mensajes cargados para usuario ${userId}`);
-      console.log(`📊 Mensajes editados en cache:`, messagesWithMeta.filter(m => m.isEdited).length);
       
       const { socket } = useAuthStore.getState();
-      if (socket && socket.connected) {
+      if (socket && socket.connected && !isLoadingMore) {
         const unreadMessages = messagesWithMeta.filter(
           msg => msg.senderId === userId && msg.status !== "read"
         );
@@ -113,9 +149,16 @@ export const useChatStore = create((set, get) => ({
     } catch (error) {
       console.error("Error loading messages:", error);
       toast.error("Error al cargar los mensajes");
-    } finally {
       set({ isMessagesLoading: false });
     }
+  },
+  
+  loadMoreMessages: async (userId) => {
+    const pagination = get().messagesPagination[userId];
+    if (!pagination?.hasMore || get().isMessagesLoading) return;
+    
+    console.log("📜 Cargando más mensajes antiguos...");
+    await get().getMessagesByUserId(userId, true);
   },
   
   sendMessage: async (messageData, payload) => {
@@ -346,9 +389,6 @@ export const useChatStore = create((set, get) => ({
     }
   },
   
-  // ==================== FUNCIONES PARA EDITAR Y ELIMINAR ====================
-  
-  // ✅ CORREGIDA: Actualizar mensaje con editedAt
   updateMessageText: (messageId, newText) => {
     const { selectedUser, messagesCache } = get();
     if (!selectedUser) return;
@@ -394,8 +434,6 @@ export const useChatStore = create((set, get) => ({
     console.log(`[STORE] Mensaje ${messageId} eliminado del cache`);
   },
   
-  // ==================== FUNCIONES PARA REACCIONES ====================
-  
   updateMessageReactions: (messageId, reactions) => {
     const { selectedUser, messagesCache } = get();
     if (!selectedUser) return;
@@ -422,6 +460,15 @@ export const useChatStore = create((set, get) => ({
     if (chatIndex !== -1) {
       const lastReaction = reactions?.length > 0 ? reactions[reactions.length - 1] : null;
       
+      let lastReactionUserName = null;
+      if (lastReaction) {
+        const userId = lastReaction.userId?._id || lastReaction.userId;
+        const reactionUser = chats[chatIndex].user?._id === userId 
+          ? chats[chatIndex].user 
+          : null;
+        lastReactionUserName = reactionUser?.fullName?.split(' ')[0] || reactionUser?.fullName || null;
+      }
+      
       const updatedChats = [...chats];
       updatedChats[chatIndex] = {
         ...updatedChats[chatIndex],
@@ -429,12 +476,13 @@ export const useChatStore = create((set, get) => ({
           ...updatedChats[chatIndex].lastMessage,
           reactions,
           lastReactionEmoji: lastReaction?.emoji || null,
-          lastReactionUser: lastReaction?.userId?._id || lastReaction?.userId || null
+          lastReactionUser: lastReaction?.userId?._id || lastReaction?.userId || null,
+          lastReactionUserName: lastReactionUserName
         }
       };
       
       set({ chats: updatedChats });
-      console.log(`[STORE] Chat ${chatIndex} actualizado con reacción ${lastReaction?.emoji}`);
+      console.log(`[STORE] Chat ${chatIndex} actualizado con reacción ${lastReaction?.emoji} de ${lastReactionUserName || 'alguien'}`);
     }
   },
   
@@ -503,7 +551,6 @@ export const useChatStore = create((set, get) => ({
           }
         }));
       } else {
-        // Eliminar solo para mí
         set((state) => ({
           messagesCache: {
             ...state.messagesCache,
@@ -595,7 +642,6 @@ export const useChatStore = create((set, get) => ({
       console.log(`Enviando ACK para mensaje ${newMessage._id}`);
       socket.emit("message_received_ack", { messageId: newMessage._id });
       
-      // Asegurar que el nuevo mensaje tenga todos los campos necesarios
       const messageWithMeta = {
         ...newMessage,
         reactions: newMessage.reactions || [],
@@ -633,16 +679,24 @@ export const useChatStore = create((set, get) => ({
       
       if (isChatOpen) {
         setTimeout(() => {
+          const messageEnd = document.getElementById('message-end');
+          if (messageEnd) {
+            const container = messageEnd.parentElement?.parentElement;
+            if (container) {
+              const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
+              if (isNearBottom) {
+                messageEnd.scrollIntoView({ behavior: 'smooth' });
+              }
+            } else {
+              messageEnd.scrollIntoView({ behavior: 'smooth' });
+            }
+          }
+        }, 100);
+        
+        setTimeout(() => {
           console.log(`Enviando READ para mensaje ${newMessage._id}`);
           socket.emit("message_read", { messageId: newMessage._id });
         }, 500);
-        
-        setTimeout(() => {
-          const messageEnd = document.getElementById('message-end');
-          if (messageEnd) {
-            messageEnd.scrollIntoView({ behavior: 'smooth' });
-          }
-        }, 100);
       } else {
         const senderName = newMessage.sender?.fullName || "Alguien";
         toast.success(`${senderName} te envio un mensaje`, {
@@ -822,7 +876,9 @@ export const useChatStore = create((set, get) => ({
       activeTab: 'chats',
       isUsersLoading: false,
       isMessagesLoading: false,
-      messageInputText: ''
+      messageInputText: '',
+      messagesPagination: {},
+      isSoundEnabled: true
     });
   },
   

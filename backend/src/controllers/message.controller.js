@@ -75,18 +75,36 @@ export const getMessagesByUserId = async (req, res) => {
   try {
     const myId = req.user._id;
     const { id: userToChatId } = req.params;
-
-    const messages = await Message.find({
+    const { limit = 20, before } = req.query;
+    
+    const query = {
       $or: [
         { senderId: myId, receiverId: userToChatId },
         { senderId: userToChatId, receiverId: myId },
       ],
-    })
-    .sort({ createdAt: 1 })
-    .limit(500)
-    .lean();
-
-    res.status(200).json(messages);
+    };
+    
+    if (before) {
+      query.createdAt = { $lt: new Date(before) };
+    }
+    
+    const messages = await Message.find(query)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .lean();
+    
+    const orderedMessages = messages.reverse();
+    
+    const hasMore = messages.length === parseInt(limit);
+    const nextCursor = hasMore && messages.length > 0 
+      ? messages[0].createdAt 
+      : null;
+    
+    res.status(200).json({
+      messages: orderedMessages,
+      hasMore,
+      nextCursor
+    });
   } catch (error) {
     console.log("Error en getMessagesByUserId: ", error.message);
     res.status(500).json({ error: "Error interno del servidor" });
@@ -496,13 +514,13 @@ export const addReaction = async (req, res) => {
       return res.status(404).json({ message: "Mensaje no encontrado" });
     }
 
-    const existingReaction = message.reactions.find(
+    const existingReactionIndex = message.reactions.findIndex(
       (r) => r.userId.toString() === userId.toString()
     );
 
-    if (existingReaction) {
-      existingReaction.emoji = emoji;
-      existingReaction.createdAt = new Date();
+    if (existingReactionIndex !== -1) {
+      message.reactions[existingReactionIndex].emoji = emoji;
+      message.reactions[existingReactionIndex].createdAt = new Date();
     } else {
       message.reactions.push({
         userId,
@@ -513,16 +531,17 @@ export const addReaction = async (req, res) => {
 
     await message.save();
 
-    const populatedMessage = await Message.findById(messageId)
-      .populate("reactions.userId", "fullName email profilePic")
-      .lean();
+    res.status(200).json({
+      message: "Reacción agregada/actualizada",
+      reactions: message.reactions,
+    });
 
     const senderSocketId = getReceiverSocketId(message.senderId.toString());
     const receiverSocketId = getReceiverSocketId(message.receiverId.toString());
 
     const reactionData = {
       messageId: message._id.toString(),
-      reactions: populatedMessage.reactions,
+      reactions: message.reactions,
     };
 
     if (senderSocketId) {
@@ -532,10 +551,6 @@ export const addReaction = async (req, res) => {
       io.to(receiverSocketId).emit("message_reaction_updated", reactionData);
     }
 
-    res.status(200).json({
-      message: "Reacción agregada/actualizada",
-      reactions: populatedMessage.reactions,
-    });
   } catch (error) {
     console.error("Error en addReaction:", error);
     res.status(500).json({ message: "Error interno del servidor" });
@@ -558,17 +573,18 @@ export const removeReaction = async (req, res) => {
 
     await message.save();
 
-    const populatedMessage = await Message.findById(messageId)
-      .populate("reactions.userId", "fullName email profilePic")
-      .lean();
-
-    const reactionData = {
-      messageId: message._id.toString(),
-      reactions: populatedMessage.reactions,
-    };
+    res.status(200).json({
+      message: "Reacción eliminada",
+      reactions: message.reactions,
+    });
 
     const senderSocketId = getReceiverSocketId(message.senderId.toString());
     const receiverSocketId = getReceiverSocketId(message.receiverId.toString());
+
+    const reactionData = {
+      messageId: message._id.toString(),
+      reactions: message.reactions,
+    };
 
     if (senderSocketId) {
       io.to(senderSocketId).emit("message_reaction_updated", reactionData);
@@ -577,10 +593,6 @@ export const removeReaction = async (req, res) => {
       io.to(receiverSocketId).emit("message_reaction_updated", reactionData);
     }
 
-    res.status(200).json({
-      message: "Reacción eliminada",
-      reactions: populatedMessage.reactions,
-    });
   } catch (error) {
     console.error("Error en removeReaction:", error);
     res.status(500).json({ message: "Error interno del servidor" });

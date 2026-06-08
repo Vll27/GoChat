@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useDebouncedCallback } from "use-debounce";
 import useKeyboardSound from "../hooks/useKeyboardSound";
@@ -12,6 +12,7 @@ function MessageInput() {
   const { messageInputText, setMessageInputText, selectedUser } = useChatStore();
   const [imagePreview, setImagePreview] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [pickerPosition, setPickerPosition] = useState({ top: 0, left: 0 });
   const fileInputRef = useRef(null);
   const textInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -20,6 +21,52 @@ function MessageInput() {
   
   const { sendMessage, isSoundEnabled } = useChatStore();
   const { sendTypingStart, sendTypingStop } = useMessageStatus();
+
+  // Calcular posición del emoji picker
+  const calculatePickerPosition = useCallback(() => {
+    if (!emojiButtonRef.current) return;
+    
+    const buttonRect = emojiButtonRef.current.getBoundingClientRect();
+    const pickerWidth = 340;
+    const pickerHeight = 320;
+    
+    // Espacio disponible
+    const spaceBelow = window.innerHeight - buttonRect.bottom;
+    const spaceAbove = buttonRect.top;
+    
+    let top, left;
+    
+    // Mostrar arriba si hay espacio, si no, abajo
+    if (spaceAbove >= pickerHeight + 10) {
+      top = buttonRect.top - pickerHeight - 10;
+    } else if (spaceBelow >= pickerHeight + 10) {
+      top = buttonRect.bottom + 10;
+    } else {
+      // Si no hay espacio, mostrar arriba con scroll
+      top = 10;
+    }
+    
+    // Calcular left centrado con el botón
+    left = buttonRect.left - (pickerWidth / 2) + (buttonRect.width / 2);
+    
+    // Asegurar que no se salga de la pantalla
+    if (left < 10) left = 10;
+    if (left + pickerWidth > window.innerWidth - 10) {
+      left = window.innerWidth - pickerWidth - 10;
+    }
+    
+    setPickerPosition({ top, left });
+  }, []);
+
+  // Abrir/cerrar picker
+  const toggleEmojiPicker = () => {
+    if (!showEmojiPicker) {
+      calculatePickerPosition();
+      setShowEmojiPicker(true);
+    } else {
+      setShowEmojiPicker(false);
+    }
+  };
 
   // Cerrar emoji picker al hacer clic fuera
   useEffect(() => {
@@ -30,9 +77,30 @@ function MessageInput() {
       }
     };
     
+    const handleEscape = (event) => {
+      if (event.key === 'Escape' && showEmojiPicker) {
+        setShowEmojiPicker(false);
+      }
+    };
+    
+    const handleScroll = () => {
+      if (showEmojiPicker) {
+        calculatePickerPosition();
+      }
+    };
+    
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    document.addEventListener('keydown', handleEscape);
+    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('resize', handleScroll);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [showEmojiPicker, calculatePickerPosition]);
 
   // Debounced typing indicator (WhatsApp style)
   const debouncedTypingStart = useDebouncedCallback(() => {
@@ -158,7 +226,7 @@ function MessageInput() {
         <button
           ref={emojiButtonRef}
           type="button"
-          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          onClick={toggleEmojiPicker}
           className="p-2 rounded-full bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition-all duration-200 hover:scale-110"
         >
           <SmileIcon className="w-5 h-5" />
@@ -207,30 +275,40 @@ function MessageInput() {
         </div>
       </form>
 
-      {/* Emoji Picker usando Portal - se renderiza en el body */}
+      {/* Emoji Picker con posicionamiento dinámico */}
       {showEmojiPicker && createPortal(
         <div 
           ref={emojiPickerRef}
-          className="bg-slate-800 rounded-xl shadow-2xl border border-slate-700 p-2"
+          className="bg-slate-800 rounded-xl shadow-2xl border border-slate-700 p-2 animate-fade-in"
           style={{
             position: 'fixed',
-            bottom: '80px',
-            left: '20px',
+            top: pickerPosition.top,
+            left: pickerPosition.left,
             zIndex: 999999,
             width: '340px',
             maxWidth: 'calc(100vw - 40px)'
           }}
         >
+          {/* Flecha indicadora */}
+          <div 
+            className="absolute w-3 h-3 bg-slate-800 rotate-45 border-t border-l border-slate-700"
+            style={{
+              top: pickerPosition.top + 5,
+              left: pickerPosition.left + 20,
+              transform: 'rotate(45deg)'
+            }}
+          />
+          
           <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-700">
             <span className="text-xs text-slate-400">Emojis</span>
             <button
               onClick={() => setShowEmojiPicker(false)}
-              className="p-1 rounded-full hover:bg-slate-700"
+              className="p-1 rounded-full hover:bg-slate-700 transition-colors"
             >
               <XIcon className="w-3 h-3 text-slate-400" />
             </button>
           </div>
-          <div className="grid grid-cols-8 gap-1 max-h-60 overflow-y-auto">
+          <div className="grid grid-cols-8 gap-1 max-h-60 overflow-y-auto custom-scrollbar">
             {emojis.map((emoji) => (
               <button
                 key={emoji}
@@ -241,6 +319,9 @@ function MessageInput() {
                 {emoji}
               </button>
             ))}
+          </div>
+          <div className="text-center text-[10px] text-slate-500 mt-2 pt-1 border-t border-slate-700">
+            Click para insertar emoji
           </div>
         </div>,
         document.body
