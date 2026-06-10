@@ -14,6 +14,7 @@ function App() {
   const { checkAuth, isCheckingAuth, authUser } = useAuthStore();
   const { setWindowFocus } = useChatStore();
   const appBgColor = useConfigStore((state) => state.appBgColor);
+  const { currentFont } = useChatStore();
 
   useEffect(() => {
     checkAuth();
@@ -69,7 +70,7 @@ function App() {
   return (
     <div 
       // Cambiamos 'min-h-screen' por 'h-screen w-screen' para asegurar que el div ocupe toda la pantalla real
-      className="h-screen w-screen relative overflow-hidden transition-colors duration-500 ease-in-out flex flex-col"
+      className={`h-screen w-screen relative overflow-hidden transition-colors duration-500 ease-in-out flex flex-col ${currentFont}`}
       style={{ 
         // Forzamos el color del store. El style inline destruye cualquier propiedad CSS externa.
         backgroundColor: appBgColor || "#000000" 

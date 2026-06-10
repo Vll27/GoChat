@@ -16,6 +16,12 @@ export const useChatStore = create((set, get) => ({
   messageInputText: "",
   setMessageInputText: (text) => set({ messageInputText: text }),
   refreshInterval: null,
+  currentFont: localStorage.getItem("gochat-font") || "font-sans",
+
+  changeFont: (fontId) => {
+    localStorage.setItem("gochat-font", fontId);
+    set({ currentFont: fontId });
+  },
 
   toggleSound: () => {
     const newValue = !get().isSoundEnabled;
