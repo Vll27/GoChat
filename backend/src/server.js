@@ -74,20 +74,32 @@ app.use(cookieParser());
 
 const corsOptions = {
   origin: function (origin, callback) {
-    const allowedOrigins = [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "http://127.0.0.1:5173",
-      "http://192.168.0.6:5173",
-      ENV.CLIENT_URL
-    ].filter(Boolean);
-    
+    // 1. Mapeamos los orígenes permitidos y les removemos la barra final '/' si la llevan
+    const rawOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5173",
+  "http://192.168.0.6:5173",
+  "http://localhost:5001", // 👈 Agregá este maje aquí para que deje de joder
+  ENV.CLIENT_URL
+];
+
+    const allowedOrigins = rawOrigins
+      .filter(Boolean)
+      .map(url => url.trim().replace(/\/$/, "")); // Quita la barra diagonal del final obligatoriamente
+
+    // 2. Permitir peticiones sin origen (como Postman o llamadas del mismo servidor)
     if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.includes(origin) || ENV.NODE_ENV !== "production") {
+
+    // Saneamos también el origen entrante por seguridad
+    const cleanOrigin = origin.trim().replace(/\/$/, "");
+
+    // 3. Validación flexible
+    if (ENV.NODE_ENV !== "production" || allowedOrigins.includes(cleanOrigin)) {
       callback(null, true);
     } else {
-      console.log("❌ CORS bloqueado para origen:", origin);
+      console.log("❌ CORS bloqueado para origen real:", origin);
+      console.log("📋 Orígenes permitidos en el backend:", allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },

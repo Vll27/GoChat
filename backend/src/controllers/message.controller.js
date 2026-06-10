@@ -116,12 +116,10 @@ export const getMessagesByUserId = async (req, res) => {
     const nextCursor = hasMore && messages.length > 0 
       ? messages[0].createdAt 
       : null;
+
+    // 🔴 CAMBIA ESTO: Quitá el objeto estructurado y mandá solo el array
+    res.status(200).json(orderedMessages); 
     
-    res.status(200).json({
-      messages: orderedMessages,
-      hasMore,
-      nextCursor
-    });
   } catch (error) {
     console.error("❌ Error en el controlador getMessagesByUserId:", error.message);
     res.status(500).json({ message: "Error interno del servidor al recuperar el historial de mensajes." });
@@ -208,6 +206,7 @@ export const getChatPartners = async (req, res) => {
   try {
     const userId = req.user._id;
     
+    // 1. Buscamos los últimos mensajes del usuario
     const lastMessages = await Message.find({
       $or: [{ senderId: userId }, { receiverId: userId }]
     })
@@ -219,39 +218,52 @@ export const getChatPartners = async (req, res) => {
       return res.status(200).json([]);
     }
     
+    // 2. Extraemos los IDs de las personas con las que se chateó
     const partnerIds = [...new Set(
-      lastMessages.flatMap(msg => 
-        msg.senderId.toString() === userId.toString() 
-          ? [msg.receiverId.toString()] 
-          : [msg.senderId.toString()]
-      )
+      lastMessages.flatMap(msg => {
+        const sId = msg.senderId?.toString();
+        const rId = msg.receiverId?.toString();
+        return sId === userId.toString() ? [rId] : [sId];
+      }).filter(Boolean) // Limpia cualquier valor nulo o undefined por si acaso
     )];
     
+    // 3. Traemos la información de esos usuarios
     const partners = await User.find({ _id: { $in: partnerIds } })
       .select("fullName email profilePic lastSeen lastSeenStatus")
       .lean();
       
-    const partnerMap = new Map(partners.map(p => [p._id.toString(), p]));
+    // 4. Creamos el mapa asegurando compatibilidad con _id o id plano
+    const partnerMap = new Map();
+    partners.forEach(p => {
+      const idStr = p._id ? p._id.toString() : p.id?.toString();
+      if (idStr) partnerMap.set(idStr, p);
+    });
     
     const chats = [];
     const seenChats = new Set();
     
+    // 5. Construimos la estructura final para el frontend
     for (const msg of lastMessages) {
-      const partnerId = msg.senderId.toString() === userId.toString() 
-        ? msg.receiverId.toString() 
-        : msg.senderId.toString();
+      const sIdStr = msg.senderId?.toString();
+      const rIdStr = msg.receiverId?.toString();
       
-      if (seenChats.has(partnerId)) continue;
+      const partnerId = sIdStr === userId.toString() ? rIdStr : sIdStr;
+      
+      if (!partnerId || seenChats.has(partnerId)) continue;
       seenChats.add(partnerId);
       
       const partner = partnerMap.get(partnerId);
       if (!partner) continue;
       
+      // BONUS: De una vez calculamos si este último mensaje está sin leer
+      // Es un mensaje sin leer si el emisor NO es el usuario actual y el estado no es 'read'
+      const isUnread = msg.senderId.toString() !== userId.toString() && msg.status !== "read";
+
       chats.push({
         _id: partnerId,
         user: partner,
         lastMessage: msg,
-        unreadCount: 0
+        unreadCount: isUnread ? 1 : 0 // Esto le da vida a las notificaciones en el cliente
       });
     }
     
