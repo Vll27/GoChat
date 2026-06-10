@@ -1,8 +1,8 @@
 import axios from "axios";
 
 export const axiosInstance = axios.create({
-  baseURL: "http://localhost:3000/api",
-  withCredentials: true,
+  baseURL: import.meta.env.MODE === "development" ? "http://localhost:5001/api" : "/api",
+  withCredentials: true, // Crucial para que se sigan enviando las cookies JWT
   timeout: 15000, // 15 segundos - balance entre feedback y operaciones largas
 });
 

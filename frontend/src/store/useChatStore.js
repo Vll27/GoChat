@@ -257,11 +257,16 @@ export const useChatStore = create((set, get) => ({
     });
 
     socket.on("chatsUpdated", () => {
+      // ✋ GUARDIÁN PERIMETRAL: Si el usuario ya le dio Logout, frená en seco y no llamés a Axios
+      if (!useAuthStore.getState().authUser) return;
+
       console.log("🔄 chatsUpdated recibido - Recargando lista de chats...");
       forceRefreshChats();
     });
 
     socket.on("userStatusChanged", ({ userId, status, lastSeen }) => {
+      if (!useAuthStore.getState().authUser) return;
+
       console.log(`📱 ChatStore recibió cambio de estado: ${userId} -> ${status}`);
       
       const { chats, selectedUser } = get();
@@ -294,6 +299,7 @@ export const useChatStore = create((set, get) => ({
       
       // 👈 FORZAR RECARGA COMPLETA PARA ASEGURAR
       setTimeout(() => {
+        if (!useAuthStore.getState().authUser) return; // Si ya se fue, abortá el temporizador
         forceRefreshChats();
       }, 500);
     });

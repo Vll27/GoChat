@@ -15,22 +15,32 @@ function ChatsList({ compact = false }) {
     markMessagesAsRead
   } = useChatStore();
 
-  const { onlineUsers, socket } = useAuthStore();
+  const { onlineUsers, socket, authUser } = useAuthStore();
 
   useEffect(() => {
+    // Si no hay un usuario autenticado, salite inmediatamente y frená la petición huérfana ✋
+    if (!authUser) return;
+
     console.log("📋 Cargando chats...");
     getMyChatPartners();
-  }, [getMyChatPartners]);
+  }, [getMyChatPartners, authUser]);
 
   useEffect(() => {
-    if (!socket) return;
+    // Si el socket o el authUser no existen, nos salimos de inmediato ✋
+    if (!socket || !authUser) return; 
     
     const handleChatsUpdated = () => {
+      // GUARDIÁN: Si el usuario ya le dio logout y no está autenticado, frenamos la petición de inmediato
+      if (!useAuthStore.getState().authUser) return;
+
       console.log("🔄 Actualizando lista de chats...");
       getMyChatPartners();
     };
     
     const handleUserStatusChange = ({ userId, status, lastSeen }) => {
+      // GUARDIÁN: Evitar mutar el estado de Zustand si ya nos estamos saliendo
+      if (!useAuthStore.getState().authUser) return;
+
       console.log(`👤 Usuario ${userId} cambió a: ${status}`);
       useChatStore.setState((state) => ({
         chats: state.chats.map(chat => 
@@ -62,7 +72,8 @@ function ChatsList({ compact = false }) {
       socket.off("chatsUpdated", handleChatsUpdated);
       socket.off("userStatusChanged", handleUserStatusChange);
     };
-  }, [socket, getMyChatPartners]);
+    // IMPORTANTE: Añadí authUser a las dependencias del efecto para que se limpie y remonte correctamente
+  }, [socket, getMyChatPartners, authUser]);
 
   const handleChatClick = (chat) => {
     console.log("💬 Seleccionando chat:", chat.user.fullName);

@@ -3,7 +3,8 @@ import { axiosInstance } from "../lib/axios";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
 
-const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:3000" : "/";
+// CORREGIDO: Puerto unificado al 5001 para coincidir con el backend en desarrollo
+const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:5001" : "/";
 
 export const useAuthStore = create((set, get) => ({
   authUser: null,
@@ -64,10 +65,24 @@ export const useAuthStore = create((set, get) => ({
 
   logout: async () => {
     try {
+      // 1. Desconectar el socket inmediatamente en el cliente
+      get().disconnectSocket();
+
+      // 2. Limpiar proactivamente los estados del ChatStore
+      try {
+        const { useChatStore } = await import("./useChatStore");
+        useChatStore.setState({ chats: [], selectedUser: null });
+      } catch (e) {
+        console.log("No se pudo limpiar ChatStore:", e.message);
+      }
+
+      // 3. Primero disparamos la petición al Backend para destruir la cookie
       await axiosInstance.post("/auth/logout");
+      
+      // 4. HASTA QUE EL BACKEND RESPONDA: Matamos el usuario localmente y tiramos el toast
       set({ authUser: null });
       toast.success("Sesión cerrada correctamente");
-      get().disconnectSocket();
+
     } catch (error) {
       toast.error("Error logging out");
       console.log("Logout error:", error);
@@ -97,7 +112,6 @@ export const useAuthStore = create((set, get) => ({
       });
 
       socket.connect();
-
       set({ socket });
 
       socket.on("getOnlineUsers", (userIds) => {
@@ -106,19 +120,19 @@ export const useAuthStore = create((set, get) => ({
       });
       
       // Evento para cuando un usuario se desconecta
-      socket.on("userOffline", ({ userId, lastSeen }) => {
-        console.log(`🔴 Usuario OFFLINE detectado: ${userId} a las ${new Date(lastSeen).toLocaleTimeString()}`);
+      socket.on("userOffline", async ({ userId, lastSeen }) => {
+        console.log(`🔴 Usuario OFFLINE detectado: ${userId}`);
         
         // Remover de onlineUsers inmediatamente
         set({ onlineUsers: get().onlineUsers.filter(id => id !== userId) });
         
-        // Actualizar chatStore inmediatamente
+        // CORREGIDO: Importación dinámica nativa con ES Modules (Elimina el require criminal)
         try {
-          const { useChatStore } = require("./useChatStore");
+          const { useChatStore } = await import("./useChatStore");
+          const chatStore = useChatStore.getState();
           
           // Actualizar el estado del usuario en chats
-          const currentChats = useChatStore.getState().chats;
-          const updatedChats = currentChats.map(chat => {
+          const updatedChats = chatStore.chats.map(chat => {
             if (chat.user?._id === userId) {
               return {
                 ...chat,
@@ -135,27 +149,26 @@ export const useAuthStore = create((set, get) => ({
           useChatStore.setState({ chats: updatedChats });
           
           // Actualizar selectedUser si es necesario
-          const selectedUser = useChatStore.getState().selectedUser;
-          if (selectedUser?._id === userId) {
+          if (chatStore.selectedUser?._id === userId) {
             useChatStore.setState({
               selectedUser: {
-                ...selectedUser,
+                ...chatStore.selectedUser,
                 lastSeenStatus: "offline",
                 lastSeen: lastSeen
               }
             });
           }
           
-          // Forzar recarga
-          if (useChatStore.getState().forceRefreshChats) {
-            useChatStore.getState().forceRefreshChats();
+          // Forzar recarga si existe la función
+          if (chatStore.forceRefreshChats) {
+            chatStore.forceRefreshChats();
           }
         } catch (e) {
-          console.log("Error:", e.message);
+          console.log("Error actualizando ChatStore desde el socket:", e.message);
         }
       });
       
-      socket.on("userStatusChanged", ({ userId, status, lastSeen }) => {
+      socket.on("userStatusChanged", async ({ userId, status, lastSeen }) => {
         console.log(`🔄 AuthStore: Usuario ${userId} cambió a estado: ${status}`);
         
         if (status === "online") {
@@ -164,11 +177,12 @@ export const useAuthStore = create((set, get) => ({
           set({ onlineUsers: get().onlineUsers.filter(id => id !== userId) });
         }
         
+        // CORREGIDO: Importación dinámica nativa con ES Modules 
         try {
-          const { useChatStore } = require("./useChatStore");
-          const currentChats = useChatStore.getState().chats;
+          const { useChatStore } = await import("./useChatStore");
+          const chatStore = useChatStore.getState();
           
-          const updatedChats = currentChats.map(chat => {
+          const updatedChats = chatStore.chats.map(chat => {
             if (chat.user?._id === userId) {
               return {
                 ...chat,
@@ -184,24 +198,23 @@ export const useAuthStore = create((set, get) => ({
           
           useChatStore.setState({ chats: updatedChats });
           
-          const selectedUser = useChatStore.getState().selectedUser;
-          if (selectedUser?._id === userId) {
+          if (chatStore.selectedUser?._id === userId) {
             useChatStore.setState({
               selectedUser: {
-                ...selectedUser,
+                ...chatStore.selectedUser,
                 lastSeenStatus: status,
                 lastSeen: lastSeen
               }
             });
           }
           
-          if (useChatStore.getState().forceRefreshChats) {
+          if (chatStore.forceRefreshChats) {
             setTimeout(() => {
-              useChatStore.getState().forceRefreshChats();
+              chatStore.forceRefreshChats();
             }, 50);
           }
         } catch (e) {
-          console.log("Error:", e.message);
+          console.log("Error cambiando estado en ChatStore:", e.message);
         }
       });
 

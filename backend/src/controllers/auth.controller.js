@@ -26,7 +26,6 @@ const withRetry = async (operation, operationName = "operación", maxRetries = 3
       const result = await operation();
       console.log(`[${operationName}] Éxito en intento ${attempt}`);
       return result;
-      
     } catch (error) {
       lastError = error;
       console.log(`[${operationName}] Intento ${attempt} falló:`, error.message);
@@ -48,40 +47,49 @@ export const signup = async (req, res) => {
   const { fullName, email, password, token_acceso } = req.body;
 
   try {
-    if (!fullName || !email || !password) {
-      return res.status(400).json({ message: "Todos los campos son obligatorios." });
+    // 1. HARDENING PERIMETRAL: Saneamiento de entradas
+    const cleanFullName = fullName ? fullName.trim() : "";
+    const cleanEmail = email ? email.trim().toLowerCase() : "";
+    const cleanPassword = password ? password.trim() : "";
+    const cleanToken = token_acceso ? token_acceso.trim() : "";
+
+    // 2. VALIDACIÓN PERIMETRAL SELECCIONAL (400 Bad Request)
+    if (!cleanFullName || !cleanEmail || !cleanPassword) {
+      return res.status(400).json({ message: "Todos los campos son obligatorios y no deben contener espacios vacíos." });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ message: "La contraseña debe tener al menos 6 caracteres." });
+    if (cleanPassword.length < 6) {
+      return res.status(400).json({ message: "La contraseña debe tener al menos 6 caracteres por seguridad." });
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: "Formato de correo electrónico no válido" });
+    if (!emailRegex.test(cleanEmail)) {
+      return res.status(400).json({ message: "El formato del correo electrónico ingresado no es válido." });
     }
 
-    const user = await withRetry(() => User.findOne({ email }).maxTimeMS(15000), "User.findOne");
+    // Consulta resiliente con datos saneados
+    const user = await withRetry(() => User.findOne({ email: cleanEmail }).maxTimeMS(15000), "User.findOne");
     
     if (user) {
-      return res.status(400).json({ message: "El correo electrónico ya existe." });
+      return res.status(400).json({ message: "El correo electrónico ya se encuentra registrado." });
     }
 
-    if (token_acceso) {
-      const existingToken = await User.findOne({ token_acceso });
+    if (cleanToken) {
+      const existingToken = await User.findOne({ token_acceso: cleanToken });
       if (existingToken) {
         return res.status(409).json({ message: "El token de acceso ya está en uso." });
       }
     }
 
+    // Generación de Hash seguro
     const salt = await bcrypt.genSalt(8);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(cleanPassword, salt);
 
     const newUser = new User({
-      fullName,
-      email,
+      fullName: cleanFullName,
+      email: cleanEmail,
       password: hashedPassword,
-      token_acceso: token_acceso || undefined,
+      token_acceso: cleanToken || undefined,
       lastSeen: new Date(),
       lastSeenStatus: "offline",
     });
@@ -90,6 +98,7 @@ export const signup = async (req, res) => {
 
     generateToken(savedUser._id, res);
 
+    // Respuesta limpia (0 fugas de campos internos innecesarios)
     res.status(201).json({
       _id: savedUser._id,
       fullName: savedUser.fullName,
@@ -106,6 +115,7 @@ export const signup = async (req, res) => {
     }, 0);
 
   } catch (error) {
+    // Registro detallado interno para auditoría en consola
     console.log("ERROR FINAL en el controlador de registro:", error.message);
     
     if (error.code === 11000) {
@@ -120,7 +130,8 @@ export const signup = async (req, res) => {
       });
     }
     
-    res.status(500).json({ message: "Error interno del servidor: " + error.message });
+    // GESTIÓN DE EXCEPCIONES NORMALIZADA (Cero concatenaciones con error.message hacia el cliente)
+    res.status(500).json({ message: "Error interno del servidor al procesar el registro." });
   }
 };
 
@@ -128,20 +139,25 @@ export const login = async (req, res) => {
   console.log("=== INICIANDO LOGIN ===");
   const { email, password } = req.body;
 
-  if (!email || !password) {
+  // Saneamiento rápido inicial perimetral
+  const cleanEmail = email ? email.trim().toLowerCase() : "";
+  const cleanPassword = password ? password.trim() : "";
+
+  if (!cleanEmail || !cleanPassword) {
     return res.status(400).json({ message: "Se requieren correo electrónico y contraseña." });
   }
 
   try {
-    console.log('Iniciando proceso de login para:', email);
+    console.log('Iniciando proceso de login para:', cleanEmail);
     
-    const user = await withRetry(() => User.findOne({ email }).maxTimeMS(15000), "User.findOne login");
+    const user = await withRetry(() => User.findOne({ email: cleanEmail }).maxTimeMS(15000), "User.findOne login");
     
+    // Alerta genérica para evitar enumeración maliciosa de credenciales
     if (!user) {
-      return res.status(400).json({ message: "Credenciales no válidas" });
+      return res.status(400).json({ message: "Credenciales no válidas." });
     }
 
-    const isPasswordCorrect = await bcrypt.compare(password, user.password);
+    const isPasswordCorrect = await bcrypt.compare(cleanPassword, user.password);
     
     if (!isPasswordCorrect) {
       return res.status(400).json({ message: "Credenciales no válidas. Inténtelo de nuevo." });
@@ -170,14 +186,13 @@ export const login = async (req, res) => {
       });
     }
     
-    res.status(500).json({ message: "Error interno del servidor" });
+    res.status(500).json({ message: "Error interno del servidor al procesar el inicio de sesión." });
   }
 };
 
 export const logout = async (req, res) => {
   try {
     console.log('=== INICIANDO LOGOUT ===');
-    
     const token = req.cookies.jwt;
     
     if (!token) {
@@ -219,20 +234,22 @@ export const logout = async (req, res) => {
             const { io, userSocketMap } = await import("../lib/socket.js");
             
             if (io) {
-              io.emit("userStatusChanged", {
-                userId: user._id.toString(),
-                status: "offline",
-                lastSeen: lastSeenTime
-              });
-              console.log(`📡 Evento userStatusChanged emitido`);
-              
-              io.emit("chatsUpdated");
-              console.log(`📡 Evento chatsUpdated emitido para todos`);
-              
-              const onlineUsers = Object.keys(userSocketMap || {});
-              io.emit("getOnlineUsers", onlineUsers);
-              console.log(`📡 Usuarios online restantes: ${onlineUsers.length}`);
-            }
+  io.emit("userStatusChanged", {
+    userId: user._id.toString(),
+    status: "offline",
+    lastSeen: lastSeenTime
+  });
+  console.log(`📡 Evento userStatusChanged emitido`);
+  
+  // CORREGIDO: Usar broadcast para no mandárselo a uno mismo si el socket está disponible,
+  // o simplemente remover este evento global si useAuthStore ya maneja el offline individualmente.
+  // La mejor opción para evitar el 401 del que se va es usar broadcast:
+  req.socket?.broadcast?.emit("chatsUpdated") || io.emit("chatsUpdated");
+  console.log(`📡 Evento chatsUpdated emitido (excluyendo origen si es posible)`);
+  
+  const onlineUsers = Object.keys(userSocketMap || {});
+  io.emit("getOnlineUsers", onlineUsers);
+}
           } catch (socketError) {
             console.error('❌ Error emitiendo evento socket:', socketError.message);
           }
@@ -247,9 +264,9 @@ export const logout = async (req, res) => {
     console.log('✅ Cierre de sesión completado');
     
   } catch (error) {
-    console.error("❌ Error en el controlador de logout:", error);
+    console.error("❌ Error en el controlador de logout:", error.message);
     res.cookie("jwt", "", { maxAge: 0 });
-    res.status(500).json({ message: "Error interno del servidor" });
+    res.status(500).json({ message: "Error interno del servidor al procesar el cierre de sesión." });
   }
 };
 
@@ -271,8 +288,8 @@ export const updateProfile = async (req, res) => {
 
     res.status(200).json(updatedUser);
   } catch (error) {
-    console.log("Error al actualizar perfil:", error);
-    res.status(500).json({ message: "Error interno del servidor" });
+    console.log("Error al actualizar perfil:", error.message);
+    res.status(500).json({ message: "Error interno del servidor al actualizar el perfil." });
   }
 };
 
@@ -280,7 +297,7 @@ export const checkAuth = async (req, res) => {
   try {
     res.status(200).json(req.user);
   } catch (error) {
-    console.log("Error in checkAuth:", error);
-    res.status(500).json({ message: "Internal server error" });
+    console.log("Error in checkAuth:", error.message);
+    res.status(500).json({ message: "Error interno del servidor en la verificación de autenticación." });
   }
 };
