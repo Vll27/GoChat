@@ -6,85 +6,167 @@ import { useAuthStore } from "./useAuthStore";
 export const useContactStore = create((set, get) => ({
   requests: [],
   unreadCount: 0,
-  _subscribed: false, // ← NUEVO: estado para controlar suscripción
+  _subscribed: false,
+
+  // Resetear todo el estado de contactos
+  resetContactState: () => {
+    console.log("🔄 Reseteando estado de contactos...");
+    
+    const socket = useAuthStore.getState().socket;
+    if (socket) {
+      socket.off("contact_request");
+      socket.off("request_accepted");
+      socket.off("request_rejected");
+      socket.off("update_requests");
+    }
+    
+    set({
+      requests: [],
+      unreadCount: 0,
+      _subscribed: false,
+    });
+  },
 
   fetchRequests: async () => {
+    const { authUser } = useAuthStore.getState();
+    if (!authUser) {
+      console.log("⚠️ fetchRequests: Usuario no autenticado");
+      return;
+    }
+    
     try {
       const res = await axiosInstance.get("/contacts/requests");
       set({ requests: res.data, unreadCount: res.data.length });
     } catch (error) {
-      console.log("Error fetching contact requests:", error);
+      if (error.response?.status !== 401) {
+        console.log("Error fetching contact requests:", error);
+      }
     }
   },
 
   sendRequest: async (targetUserId) => {
+    const { authUser } = useAuthStore.getState();
+    if (!authUser) {
+      console.log("⚠️ sendRequest: Usuario no autenticado");
+      toast.error("Debes iniciar sesión para enviar solicitudes");
+      return;
+    }
+    
     try {
       await axiosInstance.post("/contacts/send", { targetUserId });
       toast.success("Solicitud de contacto enviada");
-      // optimistic: no change to local requests list
-      // server will emit contact_request to recipient
     } catch (error) {
-      const msg = error.response?.data?.message || "Failed to send request";
-      toast.error(msg);
+      if (error.response?.status !== 401) {
+        const msg = error.response?.data?.message || "Failed to send request";
+        toast.error(msg);
+      }
     }
   },
 
   acceptRequest: async (requesterId) => {
+    const { authUser } = useAuthStore.getState();
+    if (!authUser) {
+      console.log("⚠️ acceptRequest: Usuario no autenticado");
+      return;
+    }
+    
     try {
       await axiosInstance.post("/contacts/accept", { requesterId });
       toast.success("Solicitud de contacto aceptada");
-      // refresh
       get().fetchRequests();
+      
+      // Refrescar chats cuando se acepta una solicitud
+      try {
+        const { useChatStore } = await import("./useChatStore");
+        if (useChatStore.getState().forceRefreshChats) {
+          useChatStore.getState().forceRefreshChats();
+        }
+      } catch (e) {
+        console.log("Error refreshing chats:", e);
+      }
     } catch (error) {
-      console.log("Error accepting request:", error);
-      toast.error("Failed to accept request");
+      if (error.response?.status !== 401) {
+        console.log("Error accepting request:", error);
+        toast.error("Failed to accept request");
+      }
     }
   },
 
   rejectRequest: async (requesterId) => {
+    const { authUser } = useAuthStore.getState();
+    if (!authUser) {
+      console.log("⚠️ rejectRequest: Usuario no autenticado");
+      return;
+    }
+    
     try {
       await axiosInstance.post("/contacts/reject", { requesterId });
       toast.success("Solicitud de contacto rechazada");
       get().fetchRequests();
     } catch (error) {
-      console.log("Error rejecting request:", error);
-      toast.error("Failed to reject request");
+      if (error.response?.status !== 401) {
+        console.log("Error rejecting request:", error);
+        toast.error("Failed to reject request");
+      }
     }
   },
 
-  // subscribe to socket events
   subscribeToSocket: () => {
     const socket = useAuthStore.getState().socket;
-    if (!socket) return;
+    const { authUser } = useAuthStore.getState();
+    
+    if (!socket || !authUser) {
+      console.log("⚠️ subscribeToSocket: No hay socket o usuario no autenticado");
+      return;
+    }
+    
+    if (get()._subscribed) return;
+    set({ _subscribed: true });
 
-    // CORREGIDO: evitar double-binding - lógica correcta
-    if (get()._subscribed) return; // ← Si YA está subscribed, salir
-    set({ _subscribed: true }); // ← LUEGO marcar como subscribed
+    console.log("🔔 ContactStore: Suscribiéndose a eventos de contactos...");
 
     socket.on("contact_request", (payload) => {
-      // payload.from
+      const { authUser: currentAuth } = useAuthStore.getState();
+      if (!currentAuth) return;
+      
       const current = get().requests || [];
       set({ 
         requests: [payload.from, ...current], 
         unreadCount: (get().unreadCount || 0) + 1 
       });
-      toast.success(`${payload.from.fullName} sent you a contact request`);
+      toast.success(`${payload.from.fullName} te envió una solicitud de contacto`);
     });
 
     socket.on("request_accepted", (payload) => {
-      toast.success(`${payload.to.fullName} accepted your request`);
-      // update UI as necessary
+      const { authUser: currentAuth } = useAuthStore.getState();
+      if (!currentAuth) return;
+      
+      toast.success(`${payload.to.fullName} aceptó tu solicitud`);
+      
+      try {
+        const { useChatStore } = require("./useChatStore");
+        if (useChatStore.getState().forceRefreshChats) {
+          useChatStore.getState().forceRefreshChats();
+        }
+      } catch (e) {
+        console.log("Error refreshing chats:", e);
+      }
     });
 
     socket.on("request_rejected", (payload) => {
-      toast(`${payload.from.fullName} rejected your contact request`);
+      const { authUser: currentAuth } = useAuthStore.getState();
+      if (!currentAuth) return;
+      
+      toast(`${payload.from.fullName} rechazó tu solicitud de contacto`);
     });
 
     socket.on("update_requests", () => {
+      const { authUser: currentAuth } = useAuthStore.getState();
+      if (!currentAuth) return;
+      
       get().fetchRequests();
     });
 
-    // initial fetch
     get().fetchRequests();
   },
 

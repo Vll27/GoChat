@@ -1,170 +1,167 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { useDebouncedCallback } from "use-debounce";
 import useKeyboardSound from "../hooks/useKeyboardSound";
 import { useChatStore } from "../store/useChatStore";
+import useMessageStatus from "../hooks/useMessageStatus";
 import toast from "react-hot-toast";
-import { ImageIcon, SendIcon, XIcon, SmileIcon, SearchIcon } from "lucide-react";
+import { ImageIcon, SendIcon, XIcon, SmileIcon } from "lucide-react";
 
 function MessageInput() {
   const { playRandomKeyStrokeSound } = useKeyboardSound();
-  const { messageInputText, setMessageInputText } = useChatStore();
+  const { messageInputText, setMessageInputText, selectedUser } = useChatStore();
   const [imagePreview, setImagePreview] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState("frequently");
-
+  const [pickerPosition, setPickerPosition] = useState({ top: 0, left: 0 });
   const fileInputRef = useRef(null);
-  const emojiPickerRef = useRef(null);
   const textInputRef = useRef(null);
-  const searchInputRef = useRef(null);
-
+  const typingTimeoutRef = useRef(null);
+  const emojiButtonRef = useRef(null);
+  const emojiPickerRef = useRef(null);
+  
   const { sendMessage, isSoundEnabled } = useChatStore();
+  const { sendTypingStart, sendTypingStop } = useMessageStatus();
 
-  // Categorías de emojis como WhatsApp/Telegram
-  const emojiCategories = {
-    frequently: {
-      name: "Frecuentes",
-      emojis: ['😂', '❤️', '😍', '🤣', '😊', '🙏', '🥰', '😎', '👍', '😁', '🔥', '🙌', '😘', '💕', '😉', '👏', '😜', '🤔', '🤗', '🎉']
-    },
-    people: {
-      name: "Caritas",
-      emojis: [
-        '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
-        '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚',
-        '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩',
-        '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣',
-        '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬',
-        '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗'
-      ]
-    },
-    gestures: {
-      name: "Manos",
-      emojis: [
-        '👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞',
-        '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍',
-        '👎', '👊', '✊', '🤛', '🤜', '🤝', '🙏', '✍️', '🤳', '💪'
-      ]
-    },
-    nature: {
-      name: "Animales",
-      emojis: [
-        '🐵', '🐒', '🦍', '🦧', '🐶', '🐕', '🦮', '🐩', '🐺', '🦊',
-        '🦝', '🐱', '🐈', '🦁', '🐯', '🐅', '🐆', '🐴', '🐎', '🦄',
-        '🦓', '🦌', '🐮', '🐂', '🐃', '🐄', '🐷', '🐖', '🐗', '🐽',
-        '🐸', '🐲', '🐉', '🦖', '🦕', '🐢', '🐊', '🐍', '🦎', '🐇'
-      ]
-    },
-    food: {
-      name: "Comida",
-      emojis: [
-        '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈',
-        '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦',
-        '🍕', '🌭', '🍔', '🍟', '🥪', '🌮', '🌯', '🥗', '🍿', '🧁',
-        '🍰', '🎂', '🍪', '🍩', '🍫', '🍬', '🍭', '🍮', '🍯', '☕'
-      ]
-    },
-    activities: {
-      name: "Actividades",
-      emojis: [
-        '⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸',
-        '🥊', '🎯', '🛹', '🛼', '⛸️', '🎿', '⛷️', '🏂', '🪂', '🏄',
-        '🎮', '👾', '🕹️', '🎲', '♟️', '🎳', '🎪', '🎭', '🎨', '🧩'
-      ]
-    },
-    travel: {
-      name: "Viajes",
-      emojis: [
-        '🚗', '🚕', '🚙', '🚌', '🚎', '🏎️', '🚓', '🚑', '🚒', '🚐',
-        '✈️', '🛩️', '🛫', '🛬', '🚀', '🛸', '🚁', '🛶', '⛵', '🚤',
-        '🏠', '🏡', '🏢', '🏣', '🏤', '🏥', '🏦', '🏨', '🏪', '🏫'
-      ]
-    },
-    objects: {
-      name: "Objetos",
-      emojis: [
-        '⌚', '📱', '💻', '⌨️', '🖥️', '🖨️', '🖱️', '🖲️', '📷', '📸',
-        '💡', '🔦', '🕯️', '📔', '📕', '📖', '📗', '📘', '📙', '📚',
-        '💰', '💎', '⚖️', '🛠️', '🔧', '🔨', '⚙️', '🔗', '⛓️', '💣'
-      ]
-    },
-    symbols: {
-      name: "Símbolos",
-      emojis: [
-        '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔',
-        '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️',
-        '✝️', '☪️', '🕉️', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐',
-        '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐'
-      ]
+  // Calcular posición del emoji picker
+  const calculatePickerPosition = useCallback(() => {
+    if (!emojiButtonRef.current) return;
+    
+    const buttonRect = emojiButtonRef.current.getBoundingClientRect();
+    const pickerWidth = 340;
+    const pickerHeight = 320;
+    
+    // Espacio disponible
+    const spaceBelow = window.innerHeight - buttonRect.bottom;
+    const spaceAbove = buttonRect.top;
+    
+    let top, left;
+    
+    // Mostrar arriba si hay espacio, si no, abajo
+    if (spaceAbove >= pickerHeight + 10) {
+      top = buttonRect.top - pickerHeight - 10;
+    } else if (spaceBelow >= pickerHeight + 10) {
+      top = buttonRect.bottom + 10;
+    } else {
+      // Si no hay espacio, mostrar arriba con scroll
+      top = 10;
+    }
+    
+    // Calcular left centrado con el botón
+    left = buttonRect.left - (pickerWidth / 2) + (buttonRect.width / 2);
+    
+    // Asegurar que no se salga de la pantalla
+    if (left < 10) left = 10;
+    if (left + pickerWidth > window.innerWidth - 10) {
+      left = window.innerWidth - pickerWidth - 10;
+    }
+    
+    setPickerPosition({ top, left });
+  }, []);
+
+  // Abrir/cerrar picker
+  const toggleEmojiPicker = () => {
+    if (!showEmojiPicker) {
+      calculatePickerPosition();
+      setShowEmojiPicker(true);
+    } else {
+      setShowEmojiPicker(false);
     }
   };
 
   // Cerrar emoji picker al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target) &&
+          emojiButtonRef.current && !emojiButtonRef.current.contains(event.target)) {
         setShowEmojiPicker(false);
       }
     };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+    
+    const handleEscape = (event) => {
+      if (event.key === 'Escape' && showEmojiPicker) {
+        setShowEmojiPicker(false);
+      }
     };
-  }, []);
+    
+    const handleScroll = () => {
+      if (showEmojiPicker) {
+        calculatePickerPosition();
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('resize', handleScroll);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [showEmojiPicker, calculatePickerPosition]);
 
-  // Focus en search input cuando se abre el picker
-  useEffect(() => {
-    if (showEmojiPicker && searchInputRef.current) {
-      setTimeout(() => {
-        searchInputRef.current?.focus();
-      }, 100);
+  // Debounced typing indicator (WhatsApp style)
+  const debouncedTypingStart = useDebouncedCallback(() => {
+    if (selectedUser) {
+      sendTypingStart(selectedUser._id);
     }
-  }, [showEmojiPicker]);
+  }, 300);
 
-  // Filtrar emojis basado en la búsqueda
-  const filteredEmojis = searchQuery 
-    ? Object.values(emojiCategories).flatMap(category => 
-        category.emojis.filter(emoji => 
-          emoji.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      )
-    : emojiCategories[activeCategory].emojis;
+  const handleTyping = () => {
+    if (!selectedUser) return;
+    
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    } else {
+      debouncedTypingStart();
+    }
+    
+    typingTimeoutRef.current = setTimeout(() => {
+      sendTypingStop(selectedUser._id);
+      typingTimeoutRef.current = null;
+    }, 1000);
+  };
 
-  const handleSendMessage = (e) => {
-  e.preventDefault();
-  
-  // Guardamos el texto limpio de Zustand
-  const trimmedText = messageInputText.trim();
-  
-  if (!trimmedText && !imagePreview) return;
-  if (isSoundEnabled) playRandomKeyStrokeSound();
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      sendTypingStop(selectedUser._id);
+    }
+    
+    const trimmedText = messageInputText.trim();
+    if (!trimmedText && !imagePreview) return;
+    if (isSoundEnabled) playRandomKeyStrokeSound();
 
-  // Preparar payload usando trimmedText
-  const file = fileInputRef.current?.files?.[0];
-  let payloadForServer;
-  if (file) {
-    const fd = new FormData();
-    if (trimmedText) fd.append("text", trimmedText);
-    fd.append("image", file);
-    payloadForServer = fd;
-  } else {
-    payloadForServer = { text: trimmedText, image: imagePreview };
-  }
+    const file = fileInputRef.current?.files?.[0];
+    let payloadForServer;
+    if (file) {
+      const fd = new FormData();
+      if (trimmedText) fd.append("text", trimmedText);
+      fd.append("image", file);
+      payloadForServer = fd;
+    } else {
+      payloadForServer = { text: trimmedText, image: imagePreview };
+    }
 
-  sendMessage({
-    text: trimmedText, 
-    image: imagePreview,
-  }, payloadForServer);
+    await sendMessage({
+      text: trimmedText, 
+      image: imagePreview,
+    }, payloadForServer);
 
-  setMessageInputText("");
-  setImagePreview("");
-  setShowEmojiPicker(false);
-  if (fileInputRef.current) fileInputRef.current.value = "";
-};
+    setMessageInputText("");
+    setImagePreview(null);
+    setShowEmojiPicker(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file");
+      toast.error("Solo se permiten imágenes");
       return;
     }
 
@@ -179,33 +176,44 @@ function MessageInput() {
   };
 
   const handleEmojiClick = (emoji) => {
-  // 💥 Cambiado para actualizar Zustand
-  setMessageInputText(messageInputText + emoji);
-  setTimeout(() => {
+    setMessageInputText(messageInputText + emoji);
     textInputRef.current?.focus();
-  }, 0);
+    handleTyping();
   };
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage(e);
+    } else {
+      handleTyping();
     }
   };
 
+  const emojis = [
+    '😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰',
+    '😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🤩','🥳','😏',
+    '😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠',
+    '😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫','🤥',
+    '😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','😵','🤐',
+    '🥴','🤢','🤮','🤧','😷','🤒','🤕','🤑','🤠','👋','🤚','🖐️','✋','🖖','👌','🤌',
+    '🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','👊','✊',
+    '🤛','🤜','🤝','🙏','✍️','🤳','💪','❤️','🔥','🎉','✨','💀','⭐','🌙','⚡','🌈'
+  ];
+
   return (
-    <div className="p-4 border-t border-slate-700/50">
+    <div className="p-4 border-t border-slate-700/50 bg-gradient-to-r from-slate-900/50 to-slate-800/50 backdrop-blur-sm">
       {imagePreview && (
         <div className="max-w-3xl mx-auto mb-3 flex items-center">
           <div className="relative">
             <img
               src={imagePreview}
               alt="Preview"
-              className="w-20 h-20 object-cover rounded-lg border border-slate-700"
+              className="w-20 h-20 object-cover rounded-lg border-2 border-cyan-500/50"
             />
             <button
               onClick={removeImage}
-              className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-slate-200 hover:bg-slate-700 border border-slate-600"
+              className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-white hover:bg-red-600 transition-colors"
               type="button"
             >
               <XIcon className="w-3 h-3" />
@@ -215,116 +223,15 @@ function MessageInput() {
       )}
 
       <form onSubmit={handleSendMessage} className="max-w-3xl mx-auto flex items-center gap-3">
-        {/* Botón Emoji */}
-        <div className="relative flex-shrink-0" ref={emojiPickerRef}>
-          <button
-            type="button"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className={`p-2 rounded-lg transition-all duration-200 ${
-              showEmojiPicker 
-                ? "bg-cyan-600 text-white" 
-                : "bg-slate-800/50 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
-            }`}
-            title="Seleccionar emoji"
-          >
-            <SmileIcon className="w-5 h-5" />
-          </button>
+        <button
+          ref={emojiButtonRef}
+          type="button"
+          onClick={toggleEmojiPicker}
+          className="p-2 rounded-full bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition-all duration-200 hover:scale-110"
+        >
+          <SmileIcon className="w-5 h-5" />
+        </button>
 
-          {/* Picker de Emojis */}
-          {showEmojiPicker && (
-            <div className="absolute bottom-full left-0 mb-2 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-2xl shadow-2xl w-80 h-96 flex flex-col overflow-hidden">
-              
-              {/* Header con búsqueda */}
-              <div className="p-3 border-b border-slate-200 dark:border-slate-600">
-                <div className="relative">
-                  <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Buscar emojis..."
-                    className="w-full bg-slate-100 dark:bg-slate-700 border-none rounded-lg py-2 pl-10 pr-4 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery("")}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                    >
-                      <XIcon className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Categorías */}
-              {!searchQuery && (
-                <div className="flex border-b border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50">
-                  {Object.entries(emojiCategories).map(([key, category]) => (
-                    <button
-                      key={key}
-                      onClick={() => setActiveCategory(key)}
-                      className={`flex-1 py-2 text-xs font-medium transition-colors ${
-                        activeCategory === key
-                          ? "text-cyan-600 dark:text-cyan-400 border-b-2 border-cyan-600 dark:border-cyan-400 bg-white dark:bg-slate-800"
-                          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
-                      }`}
-                    >
-                      {category.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Grid de emojis */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-3">
-                {!searchQuery && (
-                  <div className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-2 px-1">
-                    {emojiCategories[activeCategory].name}
-                  </div>
-                )}
-                <div className="grid grid-cols-8 gap-1">
-                  {filteredEmojis.map((emoji, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => handleEmojiClick(emoji)}
-                      className="text-2xl hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg p-2 transition-all duration-150 w-10 h-10 flex items-center justify-center hover:scale-110 active:scale-95"
-                      title={`Emoji: ${emoji}`}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-                {filteredEmojis.length === 0 && searchQuery && (
-                  <div className="text-center text-slate-500 dark:text-slate-400 py-8">
-                    <div className="text-4xl mb-2">😕</div>
-                    <div className="text-sm">No se encontraron emojis</div>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="border-t border-slate-200 dark:border-slate-600 p-3 bg-slate-50 dark:bg-slate-700/50">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                    {searchQuery ? `${filteredEmojis.length} resultados` : `Emojis ${emojiCategories[activeCategory].name.toLowerCase()}`}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowEmojiPicker(false)}
-                    className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600"
-                    title="Cerrar"
-                  >
-                    <XIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Input de texto */}
         <div className="flex-1">
           <input
             ref={textInputRef}
@@ -332,16 +239,16 @@ function MessageInput() {
             value={messageInputText}
             onChange={(e) => {
               setMessageInputText(e.target.value);
-              isSoundEnabled && playRandomKeyStrokeSound();
+              if (isSoundEnabled) playRandomKeyStrokeSound();
+              handleTyping();
             }}
             onKeyPress={handleKeyPress}
-            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg py-3 px-4 text-slate-200 placeholder-slate-400 focus:outline-none focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 transition-all duration-200"
-            placeholder="Escribí un mensaje..."
+            className="w-full bg-slate-700/50 border border-slate-600 rounded-full py-3 px-5 text-slate-200 placeholder-slate-400 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all duration-200"
+            placeholder="Escribe un mensaje..."
           />
         </div>
 
-        {/* Botones de acción */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2">
           <input
             type="file"
             accept="image/*"
@@ -353,12 +260,7 @@ function MessageInput() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className={`p-2 rounded-lg transition-all duration-200 ${
-              imagePreview 
-                ? "bg-cyan-600 text-white" 
-                : "bg-slate-800/50 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
-            }`}
-            title="Subir imagen"
+            className="p-2 rounded-full bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition-all duration-200 hover:scale-110"
           >
             <ImageIcon className="w-5 h-5" />
           </button>
@@ -366,32 +268,64 @@ function MessageInput() {
           <button
             type="submit"
             disabled={!messageInputText.trim() && !imagePreview}
-            className="p-2 bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-lg font-medium hover:from-cyan-600 hover:to-cyan-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg shadow-cyan-500/20"
-            title="Enviar mensaje"
+            className="p-2 rounded-full bg-gradient-to-r from-cyan-500 to-cyan-600 text-white hover:from-cyan-600 hover:to-cyan-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 hover:scale-110 shadow-lg shadow-cyan-500/25"
           >
             <SendIcon className="w-5 h-5" />
           </button>
         </div>
       </form>
 
-      {/* Estilos personalizados para el scrollbar */}
-      <style>
-        {`
-          .custom-scrollbar::-webkit-scrollbar {
-            width: 6px;
-          }
-          .custom-scrollbar::-webkit-scrollbar-track {
-            background: transparent;
-          }
-          .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: rgba(100, 116, 139, 0.3);
-            border-radius: 3px;
-          }
-          .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: rgba(100, 116, 139, 0.5);
-          }
-        `}
-      </style>
+      {/* Emoji Picker con posicionamiento dinámico */}
+      {showEmojiPicker && createPortal(
+        <div 
+          ref={emojiPickerRef}
+          className="bg-slate-800 rounded-xl shadow-2xl border border-slate-700 p-2 animate-fade-in"
+          style={{
+            position: 'fixed',
+            top: pickerPosition.top,
+            left: pickerPosition.left,
+            zIndex: 999999,
+            width: '340px',
+            maxWidth: 'calc(100vw - 40px)'
+          }}
+        >
+          {/* Flecha indicadora */}
+          <div 
+            className="absolute w-3 h-3 bg-slate-800 rotate-45 border-t border-l border-slate-700"
+            style={{
+              top: pickerPosition.top + 5,
+              left: pickerPosition.left + 20,
+              transform: 'rotate(45deg)'
+            }}
+          />
+          
+          <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-700">
+            <span className="text-xs text-slate-400">Emojis</span>
+            <button
+              onClick={() => setShowEmojiPicker(false)}
+              className="p-1 rounded-full hover:bg-slate-700 transition-colors"
+            >
+              <XIcon className="w-3 h-3 text-slate-400" />
+            </button>
+          </div>
+          <div className="grid grid-cols-8 gap-1 max-h-60 overflow-y-auto custom-scrollbar">
+            {emojis.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => handleEmojiClick(emoji)}
+                className="text-2xl hover:bg-slate-700 rounded-lg p-1 transition-all duration-150 hover:scale-125"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+          <div className="text-center text-[10px] text-slate-500 mt-2 pt-1 border-t border-slate-700">
+            Click para insertar emoji
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

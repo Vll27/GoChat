@@ -15,21 +15,22 @@ model User {
   profilePic      String    @default("")
   pendingRequests String[]  @db.ObjectId
   contacts        String[]  @db.ObjectId
-  lastSeen        DateTime? @default(now())  // 👈 NUEVO: última vez que el usuario estuvo activo
-  lastSeenStatus  String    @default("offline") // 👈 NUEVO: "online", "offline", "away"
+  lastSeen        DateTime? @default(now())
+  lastSeenStatus  String    @default("offline")
   sentMessages    Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
 
-// Modelo Message (equivalente a Mongoose)
+// Modelo Message (equivalente a Mongoose) - CON CAMPO status
 model Message {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
   senderId   String   @db.ObjectId
   receiverId String   @db.ObjectId
   text       String?
   image      String?
+  status     String   @default("sent") // 👈 NUEVO: "sending", "sent", "delivered", "read"
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -39,4 +40,5 @@ model Message {
   @@index([senderId, receiverId, createdAt(sort: Desc)])
   @@index([receiverId, senderId, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
+  @@index([status]) // 👈 NUEVO: índice para búsquedas por estado
 }

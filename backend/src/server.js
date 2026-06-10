@@ -5,13 +5,17 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import path from "path";
 import cors from "cors";
+import helmet from "helmet";
+import compression from "compression";
+import rateLimit from "express-rate-limit";
 import 'dotenv/config';
 
 import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
 import contactRoutes from "./routes/contact.route.js";
 import accesoRoutes from "./routes/acceso.routes.js";
-import userRoutes from "./routes/user.routes.js"; 
+import userRoutes from "./routes/user.routes.js";
+import messageStatusRoutes from "./routes/messageStatus.routes.js";
 import { connectDB } from "./lib/db.js";
 import { ENV } from "./lib/env.js";
 import { app, server } from "./lib/socket.js";
@@ -19,65 +23,119 @@ import { app, server } from "./lib/socket.js";
 const __dirname = path.resolve();
 const PORT = ENV.PORT || 3000;
 
-// Middleware perimetral para prevenir ECONNRESET
+// ==================== MIDDLEWARE DE SEGURIDAD Y RENDIMIENTO ====================
+
+// Helmet para endurecer cabeceras HTTP en producción
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
+}));
+
+// Gzip compression para acelerar la carga del monolito
+app.use(compression());
+
+// Rate limiting selectivo para proteger la API de abusos
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 50, // 50 intentos por IP
+  message: "Demasiados intentos desde esta IP, por favor intenta más tarde.",
+  skipSuccessfulRequests: true,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 100, // 100 peticiones por minuto
+  message: "Demasiadas peticiones consecutivas, espera un momento.",
+  skip: () => ENV.NODE_ENV === "development",
+});
+
+// ==================== MANEJO PERIMETRAL DE ERRORES DE CONEXIÓN ====================
+
 app.use((req, res, next) => {
   req.on('error', (err) => {
     if (err.code === 'ECONNRESET') {
-      console.log('Client connection reset detectado en el flujo perimetral.');
+      console.log('⚠️ Client connection reset detectado en el flujo perimetral.');
+    }
+  });
+  res.on('error', (err) => {
+    if (err.code === 'ECONNRESET') {
+      console.log('⚠️ Response connection reset detectado.');
     }
   });
   next();
 });
 
-// Límite perimetral estricto para payloads de entrada
-app.use(express.json({ limit: "5mb" }));
-
-// CONFIGURACIÓN DE CORS ENDURECIDA CONTEXTUALMENTE
-// La Guía 10 exige eliminar el riesgo de CORS compartiendo el mismo origen en producción.
-if (ENV.NODE_ENV !== "production") {
-  app.use(cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
-      
-      const allowedOrigins = [
-        "http://localhost:5173",
-        "http://localhost:5174", 
-        "http://127.0.0.1:5173",
-        "http://192.168.0.6:5173"
-      ];
-      
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.log("⚠️ CORS bloqueado en desarrollo para origen:", origin);
-        callback(new Error('Acceso denegado por políticas de CORS de desarrollo.'));
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Cookie"]
-  }));
-  app.options('*', cors());
-}
-
+// Payload Sizing estricto (Equilibrio de capacidad: subida de imágenes optimizada a 10mb)
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
-// ========================================================
-// CAPA PERIMETRAL: RUTAS DE LA API (DEBEN IR PRIMERO)
-// ========================================================
-app.use("/api/auth", authRoutes);
-app.use("/api/messages", messageRoutes);
-app.use("/api/contacts", contactRoutes);
-app.use("/api", accesoRoutes);
-app.use("/api/users", userRoutes); 
+// ==================== CORS CONFIGURACIÓN COMPARTIDA Y CONTEXTUAL ====================
 
-// ========================================================
-// ACOPLAMIENTO MONOLÍTICO: ARCHIVOS ESTÁTICOS DEL FRONTEND
-// ========================================================
+const corsOptions = {
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "http://127.0.0.1:5173",
+      "http://192.168.0.6:5173",
+      ENV.CLIENT_URL
+    ].filter(Boolean);
+    
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin) || ENV.NODE_ENV !== "production") {
+      callback(null, true);
+    } else {
+      console.log("❌ CORS bloqueado para origen:", origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization", "Cookie", "Accept", "X-Requested-With"],
+  exposedHeaders: ["set-cookie"],
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+  maxAge: 86400
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
+// ==================== DEBUG MIDDLEWARE (Solo desarrollo) ====================
+
+if (ENV.NODE_ENV === "development") {
+  app.use((req, res, next) => {
+    console.log(`📡 ${req.method} ${req.url} - Origin: ${req.headers.origin || 'same-origin'}`);
+    next();
+  });
+}
+
+// ==================== RUTAS DE LA API ====================
+
+// Health check para monitoreo en Render
+app.get("/health", (req, res) => {
+  res.status(200).json({ 
+    status: "OK", 
+    timestamp: new Date(),
+    uptime: process.uptime()
+  });
+});
+
+app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/messages", apiLimiter, messageRoutes);
+app.use("/api/contacts", apiLimiter, contactRoutes);
+app.use("/api", accesoRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/message-status", apiLimiter, messageStatusRoutes);
+
+// ==================== ACOPLAMIENTO MONOLÍTICO: ARCHIVOS ESTÁTICOS ====================
+
 if (ENV.NODE_ENV === "production") {
   const distPath = path.join(__dirname, "../frontend/dist");
   
-  // Servir de forma nativa los recursos compilados de React (JS, CSS, HTML, Imágenes)
+  // Servir de forma nativa los recursos compilados de React
   app.use(express.static(distPath));
 
   // Catch-All (Ruta comodín): Delega el manejo de URLs al React Router de la SPA
@@ -85,38 +143,70 @@ if (ENV.NODE_ENV === "production") {
     res.sendFile(path.join(distPath, "index.html"));
   });
 } else {
-  // Manejador básico en desarrollo para evitar errores al consultar la raíz
   app.get("/", (req, res) => {
     res.status(200).json({ mensaje: "API del Servidor corriendo en modo de desarrollo local." });
   });
 }
 
-// ========================================================
-// GESTIÓN DE EXCEPCIONES NORMALIZADA (Saneamiento global de errores)
-// ========================================================
+// ==================== GESTIÓN DE EXCEPCIONES GLOBAL HIGIENIZADA ====================
+
 app.use((error, req, res, next) => {
   if (error.code === 'ECONNRESET') {
-    console.log('Connection reset by client interceptado globalmente.');
+    console.log('⚠️ Connection reset by client interceptado globalmente.');
     return;
   }
   
-  // Auditoría en la consola interna del servidor (No se expone al usuario)
-  console.error('❌ [MANEJADOR GLOBAL DE ERRORES]:', error.message || error);
+  if (error.type === 'entity.too.large') {
+    return res.status(413).json({ message: 'El archivo que intentas subir excede el límite permitido.' });
+  }
   
-  // Rúbrica Guía 10: Respuesta normalizada e higienizada al cliente (Cero fugas de infraestructura)
+  if (error.message === 'Not allowed by CORS') {
+    return res.status(403).json({ message: 'Acceso denegado por políticas de CORS de producción.' });
+  }
+  
+  // Auditoría en consola interna del servidor (Sin fugas de infraestructura hacia el cliente)
+  console.error("❌ [MANEJADOR GLOBAL DE ERRORES]:", error.message || error);
   res.status(500).json({ message: 'Error interno en el servidor al procesar la solicitud.' });
 });
 
+// ==================== MANEJO DE PROCESOS Y SHUTDOWN CONTROLADO ====================
+
 process.on('uncaughtException', (error) => {
   console.error('💥 Excepción No Controlada (Uncaught Exception):', error.message || error);
+  if (ENV.NODE_ENV === "production") {
+    process.exit(1);
+  }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('💥 Promesa Rechazada No Manejada en:', promise, 'Razón:', reason);
+  if (ENV.NODE_ENV === "production") {
+    process.exit(1);
+  }
 });
 
-// Inicialización del servicio
+// Cierre controlado (Graceful Shutdown) exigido para despliegues limpios en la nube
+const shutdown = async () => {
+  console.log('🛑 Cerrando procesos del servidor de forma ordenada...');
+  server.close(() => {
+    console.log('✅ Servidor HTTP y Sockets cerrados exitosamente.');
+    process.exit(0);
+  });
+  
+  setTimeout(() => {
+    console.error('⚠️ Timeout forzado de apagado.');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+// ==================== INICIO DEL SERVICIO ====================
+
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Servidor en ejecución nativa sobre el puerto: ${PORT}`);
+  console.log(`🚀 Servidor corriendo de forma nativa en el puerto: ${PORT}`);
+  console.log(`🌍 Entorno activo: ${ENV.NODE_ENV || 'development'}`);
+  console.log(`🔗 URL del cliente configurada: ${ENV.CLIENT_URL || 'http://localhost:5173'}`);
   connectDB();
 });

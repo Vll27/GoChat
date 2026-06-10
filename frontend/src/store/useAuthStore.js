@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { axiosInstance } from "../lib/axios";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
+import { useChatStore } from "./useChatStore";
 
 // CORREGIDO: Puerto unificado al 5001 para coincidir con el backend en desarrollo
 const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:5001" : "/";
@@ -84,8 +85,16 @@ export const useAuthStore = create((set, get) => ({
       toast.success("Sesión cerrada correctamente");
 
     } catch (error) {
-      toast.error("Error logging out");
-      console.log("Logout error:", error);
+      console.log("Logout error:", error.message);
+      useChatStore.setState({ 
+        chats: [], 
+        messages: [], 
+        selectedUser: null,
+        allContacts: [] 
+      });
+      set({ authUser: null });
+      get().disconnectSocket();
+      window.location.href = "/login";
     }
   },
 
@@ -119,11 +128,9 @@ export const useAuthStore = create((set, get) => ({
         console.log("🟢 Usuarios online actualizados:", userIds);
       });
       
-      // Evento para cuando un usuario se desconecta
       socket.on("userOffline", async ({ userId, lastSeen }) => {
-        console.log(`🔴 Usuario OFFLINE detectado: ${userId}`);
+        console.log(`🔴 Usuario OFFLINE detectado: ${userId} a las ${new Date(lastSeen).toLocaleTimeString()}`);
         
-        // Remover de onlineUsers inmediatamente
         set({ onlineUsers: get().onlineUsers.filter(id => id !== userId) });
         
         // CORREGIDO: Importación dinámica nativa con ES Modules (Elimina el require criminal)
@@ -208,13 +215,29 @@ export const useAuthStore = create((set, get) => ({
             });
           }
           
-          if (chatStore.forceRefreshChats) {
+          const { authUser } = get();
+          if (authUser && chatStore.forceRefreshChats) {
             setTimeout(() => {
               chatStore.forceRefreshChats();
             }, 50);
           }
         } catch (e) {
           console.log("Error cambiando estado en ChatStore:", e.message);
+        }
+      });
+
+      // 👈 NUEVO: Cuando el socket se conecta, notificar a todos los contactos
+      // que este usuario está online y marcar mensajes pendientes como entregados
+      socket.on("connect", () => {
+        console.log("✅ Socket conectado, notificando a contactos...");
+        
+        const { chats } = useChatStore.getState();
+        if (chats && chats.length > 0) {
+          chats.forEach(chat => {
+            if (chat.user?._id) {
+              socket.emit("markPendingMessagesAsDelivered", { senderId: chat.user._id });
+            }
+          });
         }
       });
 

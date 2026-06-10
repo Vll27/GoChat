@@ -6,6 +6,15 @@ import {
   getMessagesByUserId,
   sendMessage,
   searchUsers,
+  updateMessageStatus,
+  markMessagesAsRead,
+  getMessageInfo,
+  editMessage,
+  deleteMessage,
+  copyMessage,
+  addReaction,
+  removeReaction,
+  getMessageReactions,
 } from "../controllers/message.controller.js";
 import { protectRoute } from "../middleware/auth.middleware.js";
 import { arcjetProtection } from "../middleware/arcjet.middleware.js";
@@ -26,8 +35,6 @@ const upload = multer({
   },
 });
 
-// Los middlewares se ejecutan en orden, por lo que las solicitudes se limitan primero y luego se autentican.
-// Esto es más eficiente, ya que las solicitudes no autenticadas se bloquean mediante la limitación de velocidad antes de llegar al middleware de autenticación.
 router.use(arcjetProtection, protectRoute);
 
 router.get("/contacts", getAllContacts);
@@ -35,5 +42,19 @@ router.get("/search", searchUsers);
 router.get("/chats", getChatPartners);
 router.get("/:id", getMessagesByUserId);
 router.post("/send/:id", upload.single("image"), sendMessage);
+
+router.patch("/status/:messageId", updateMessageStatus);
+router.post("/read/:senderId", markMessagesAsRead);
+
+// Rutas para editar y eliminar
+router.get("/info/:messageId", getMessageInfo);
+router.patch("/edit/:messageId", editMessage);
+router.delete("/delete/:messageId", deleteMessage);
+router.post("/copy/:messageId", copyMessage);
+
+// Rutas para reacciones
+router.post("/react/:messageId", addReaction);
+router.delete("/react/:messageId", removeReaction);
+router.get("/react/:messageId", getMessageReactions);
 
 export default router;

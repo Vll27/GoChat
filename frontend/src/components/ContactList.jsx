@@ -1,16 +1,24 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import UsersLoadingSkeleton from "./UsersLoadingSkeleton";
 
 function ContactList({ compact = false }) {
   const { getAllContacts, allContacts, isUsersLoading, setSelectedUser, selectedUser } = useChatStore();
-  const { onlineUsers } = useAuthStore();
+  const { onlineUsers, authUser } = useAuthStore();
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    getAllContacts();
-  }, [getAllContacts]);
+    isMounted.current = true;
+    if (authUser && isMounted.current) {
+      getAllContacts();
+    }
+    return () => {
+      isMounted.current = false;
+    };
+  }, [getAllContacts, authUser]);
 
+  if (!authUser) return null;
   if (isUsersLoading) return <UsersLoadingSkeleton />;
 
   return (
@@ -24,7 +32,6 @@ function ContactList({ compact = false }) {
           } ${selectedUser?._id === contact._id ? "bg-slate-700/50" : ""}`}
           title={compact ? contact.fullName : ""}
         >
-          {/* Avatar con indicador online */}
           <div className="flex-shrink-0 relative">
             <div className={`${compact ? "w-8 h-8" : "w-12 h-12"} rounded-full bg-slate-600 flex items-center justify-center overflow-hidden`}>
               <img
@@ -38,7 +45,6 @@ function ContactList({ compact = false }) {
             )}
           </div>
 
-          {/* Contenido - oculto cuando está compacto */}
           {!compact && (
             <div className="flex-1 min-w-0">
               <h4 className="font-medium text-slate-200 truncate">
