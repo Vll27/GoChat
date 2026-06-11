@@ -35,11 +35,11 @@ const PORT = ENV.PORT || 3000;
 // ==================== MIDDLEWARE DE SEGURIDAD Y RENDIMIENTO ====================
 
 // Helmet optimizado para que no bloquee los assets locales de React (dist)
-app.use(helmet({
+/*app.use(helmet({
   contentSecurityPolicy: false, // Desactivamos CSP temporalmente para asegurar que carguen tus scripts
   crossOriginResourcePolicy: { policy: "cross-origin" },
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
-}));
+}));*/
 
 // Gzip compression para acelerar la carga del monolito
 app.use(compression());
