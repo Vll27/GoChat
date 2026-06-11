@@ -16,6 +16,9 @@ function App() {
   const appBgColor = useConfigStore((state) => state.appBgColor);
   const { currentFont } = useChatStore();
 
+  // 🏁 DECLARACIÓN REQUERIDA PARA LA SUSCRIPCIÓN DEL SOCKET:
+  const isSubscribed = useRef(false);
+
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
@@ -29,10 +32,9 @@ function App() {
     }
   }, []);
 
-  // Deteccion de foco de ventana
+  // Deteccion de foco de ventana (¡CORREGIDO NATALMENTE!)
   useEffect(() => {
     const handleFocus = () => {
-      document.hasFocus().current = true;
       console.log("Ventana en foco");
       
       if (socket && authUser && socket.connected) {
@@ -41,16 +43,13 @@ function App() {
     };
 
     const handleBlur = () => {
-      document.hasFocus().current = false;
       console.log("Ventana fuera de foco");
     };
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        document.hasFocus().current = false;
         console.log("Pagina oculta");
       } else {
-        document.hasFocus().current = true;
         console.log("Pagina visible");
         
         if (socket && authUser && socket.connected) {
@@ -62,8 +61,6 @@ function App() {
     window.addEventListener('focus', handleFocus);
     window.addEventListener('blur', handleBlur);
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    document.hasFocus().current = document.hasFocus();
 
     return () => {
       window.removeEventListener('focus', handleFocus);

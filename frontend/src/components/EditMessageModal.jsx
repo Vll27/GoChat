@@ -152,7 +152,7 @@ const EditMessageModal = ({ message, onSave, onClose }) => {
       className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in"
       onClick={handleBackdropClick}
     >
-      <div 
+    <div 
       ref={modalRef}
       className="bg-slate-800 rounded-2xl w-full max-w-md mx-4 shadow-2xl border border-slate-700 animate-zoom-in"
     >
