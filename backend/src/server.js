@@ -34,8 +34,9 @@ const PORT = ENV.PORT || 3000;
 
 // ==================== MIDDLEWARE DE SEGURIDAD Y RENDIMIENTO ====================
 
-// Helmet para endurecer cabeceras HTTP en producción
+// Helmet optimizado para que no bloquee los assets locales de React (dist)
 app.use(helmet({
+  contentSecurityPolicy: false, // Desactivamos CSP temporalmente para asegurar que carguen tus scripts
   crossOriginResourcePolicy: { policy: "cross-origin" },
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
 }));
@@ -154,8 +155,9 @@ app.use("/api/message-status", apiLimiter, messageStatusRoutes);
 
 // ==================== ACOPLAMIENTO MONOLÍTICO: ARCHIVOS ESTÁTICOS ====================
 
-if (ENV.NODE_ENV === "production") {
-  const distPath = path.join(__dirname, "frontend/dist");
+if (process.env.NODE_ENV === "production" || ENV.NODE_ENV === "production") {
+  // path.resolve asegura la ruta absoluta desde la raíz del contenedor de Render
+  const distPath = path.resolve(__dirname, "frontend", "dist");
   
   // Servir de forma nativa los recursos compilados de React
   app.use(express.static(distPath));
