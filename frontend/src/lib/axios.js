@@ -1,15 +1,13 @@
 import axios from "axios";
 import { useAuthStore } from "../store/useAuthStore";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+// Dejamos que use la variable si existe, sino usamos la ruta relativa del monolito en producción
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.MODE === "production" ? "/api" : "http://localhost:5001/api");
 
 export const axiosInstance = axios.create({
-  baseURL: import.meta.env.MODE === "development" ? "http://localhost:5001/api" : "/api",
-  withCredentials: true, // Crucial para que se sigan enviando las cookies JWT
-  timeout: 15000, // 15 segundos - balance entre feedback y operaciones largas
   baseURL: API_URL,
-  withCredentials: true,
-  timeout: 30000,
+  withCredentials: true, // Crucial para las cookies JWT
+  timeout: 30000,        // 30 segundos equilibrados
   headers: {
     "Content-Type": "application/json",
   },

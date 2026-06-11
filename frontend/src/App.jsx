@@ -32,7 +32,7 @@ function App() {
   // Deteccion de foco de ventana
   useEffect(() => {
     const handleFocus = () => {
-      isWindowFocused.current = true;
+      document.hasFocus().current = true;
       console.log("Ventana en foco");
       
       if (socket && authUser && socket.connected) {
@@ -41,16 +41,16 @@ function App() {
     };
 
     const handleBlur = () => {
-      isWindowFocused.current = false;
+      document.hasFocus().current = false;
       console.log("Ventana fuera de foco");
     };
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        isWindowFocused.current = false;
+        document.hasFocus().current = false;
         console.log("Pagina oculta");
       } else {
-        isWindowFocused.current = true;
+        document.hasFocus().current = true;
         console.log("Pagina visible");
         
         if (socket && authUser && socket.connected) {
@@ -63,7 +63,7 @@ function App() {
     window.addEventListener('blur', handleBlur);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    isWindowFocused.current = document.hasFocus();
+    document.hasFocus().current = document.hasFocus();
 
     return () => {
       window.removeEventListener('focus', handleFocus);

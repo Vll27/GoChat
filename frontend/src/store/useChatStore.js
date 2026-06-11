@@ -13,7 +13,6 @@ export const useChatStore = create((set, get) => ({
   isUsersLoading: false,
   isMessagesLoading: false,
   isSoundEnabled: JSON.parse(localStorage.getItem("isSoundEnabled")) !== false,
-  isWindowFocused: true,
   messageInputText: "",
   setMessageInputText: (text) => set({ messageInputText: text }),
   refreshInterval: null,
