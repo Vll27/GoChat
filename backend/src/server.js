@@ -8,7 +8,17 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import rateLimit from "express-rate-limit";
-import 'dotenv/config';
+import dotenv from "dotenv";
+
+// ==================== CONFIGURACIÓN DE ENTORNO CONTROLADA ====================
+const __dirname = path.resolve();
+
+// Si NO estamos en producción (o sea, estás en tu PC), cargamos el archivo físico backend/.env
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config({ path: path.resolve(__dirname, "backend/.env") });
+}
+// NOTA: En Render (producción), Node ignorará el código anterior y leerá directamente 
+// las variables que configuraste en la pestaña "Environment" de la plataforma.
 
 import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
@@ -20,7 +30,6 @@ import { connectDB } from "./lib/db.js";
 import { ENV } from "./lib/env.js";
 import { app, server } from "./lib/socket.js";
 
-const __dirname = path.resolve();
 const PORT = ENV.PORT || 3000;
 
 // ==================== MIDDLEWARE DE SEGURIDAD Y RENDIMIENTO ====================
@@ -76,13 +85,13 @@ const corsOptions = {
   origin: function (origin, callback) {
     // 1. Mapeamos los orígenes permitidos y les removemos la barra final '/' si la llevan
     const rawOrigins = [
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "http://127.0.0.1:5173",
-  "http://192.168.0.6:5173",
-  "http://localhost:5001", // 👈 Agregá este maje aquí para que deje de joder
-  ENV.CLIENT_URL
-];
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "http://127.0.0.1:5173",
+      "http://192.168.0.6:5173",
+      "http://localhost:5001", // 👈 Agregá este maje aquí para que deje de joder
+      ENV.CLIENT_URL
+    ];
 
     const allowedOrigins = rawOrigins
       .filter(Boolean)
@@ -145,7 +154,7 @@ app.use("/api/message-status", apiLimiter, messageStatusRoutes);
 // ==================== ACOPLAMIENTO MONOLÍTICO: ARCHIVOS ESTÁTICOS ====================
 
 if (ENV.NODE_ENV === "production") {
-  const distPath = path.join(__dirname, "../frontend/dist");
+  const distPath = path.join(__dirname, "frontend/dist");
   
   // Servir de forma nativa los recursos compilados de React
   app.use(express.static(distPath));
