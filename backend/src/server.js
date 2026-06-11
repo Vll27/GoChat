@@ -156,16 +156,16 @@ app.use("/api/message-status", apiLimiter, messageStatusRoutes);
 // ==================== ACOPLAMIENTO MONOLÍTICO: ARCHIVOS ESTÁTICOS ====================
 
 if (process.env.NODE_ENV === "production" || ENV.NODE_ENV === "production") {
-  // Salimos de 'src' y 'backend' usando un solo salto relativo correcto basado en tu estructura
-  // de forma que apunte exactamente a /opt/render/project/src/frontend/dist
-  const distPath = path.resolve(__dirname, "../../frontend/dist");
+  // process.cwd() nos da la raíz exacta del proyecto en Render (/opt/render/project/src)
+  // y desde ahí entramos directamente a frontend/dist sin usar "__dirname" ni ".."
+  const distPath = path.resolve(process.cwd(), "frontend", "dist");
   
-  console.log("📂 Buscando recursos estáticos en la ruta absoluta:", distPath);
+  console.log("📂 Buscando recursos estáticos en la ruta absoluta (CWD):", distPath);
 
-  // Servir los recursos compilados de React
+  // Servir de forma nativa los recursos compilados de React
   app.use(express.static(distPath));
 
-  // Catch-All para delegar al React Router
+  // Catch-All (Ruta comodín): Delega el manejo de URLs al React Router de la SPA
   app.get("*", (req, res) => {
     res.sendFile(path.join(distPath, "index.html"));
   });
