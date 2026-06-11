@@ -18,9 +18,11 @@ const messageSchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: 2000,
+      default: "",
     },
     image: {
       type: String,
+      default: null,
     },
 mediaType: {
       type: String,
@@ -32,7 +34,26 @@ mediaType: {
       default: "sent",
       index: true,
     },
-    // NUEVOS CAMPOS PARA EDICIÓN
+    // ==================== REACCIONES ====================
+    reactions: {
+      type: [{
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        emoji: {
+          type: String,
+          required: true,
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      }],
+      default: [],
+    },
+    // ==================== EDICIÓN ====================
     editedAt: {
       type: Date,
       default: null,
@@ -41,7 +62,7 @@ mediaType: {
       type: String,
       default: null,
     },
-    // NUEVOS CAMPOS PARA ELIMINACIÓN
+    // ==================== ELIMINACIÓN ====================
     deletedForEveryone: {
       type: Boolean,
       default: false,
@@ -63,23 +84,25 @@ mediaType: {
   }
 );
 
-// Virtual para saber si el mensaje fue editado
+// ==================== VIRTUALES ====================
+
 messageSchema.virtual('isEdited').get(function() {
   return this.editedAt !== null && this.editedAt !== undefined;
 });
 
-// Virtual para saber si el mensaje fue eliminado para todos
 messageSchema.virtual('isDeletedForEveryone').get(function() {
   return this.deletedForEveryone === true;
 });
 
-// Índices compuestos críticos
+// ==================== ÍNDICES ====================
+
 messageSchema.index({ senderId: 1, receiverId: 1, createdAt: -1 });
 messageSchema.index({ receiverId: 1, status: 1, createdAt: -1 });
 messageSchema.index({ createdAt: -1 });
 messageSchema.index({ senderId: 1, createdAt: -1 });
 messageSchema.index({ receiverId: 1, senderId: 1, status: 1 });
 messageSchema.index({ deletedForEveryone: 1 });
+messageSchema.index({ "reactions.userId": 1 });
 messageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 31536000 });
 
 const Message = mongoose.model("Message", messageSchema);

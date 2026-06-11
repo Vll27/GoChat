@@ -167,11 +167,20 @@ function ChatsList({ compact = false }) {
     };
     
     const handleMessageReactionUpdated = ({ messageId, reactions }) => {
-      const { chats } = useChatStore.getState();
+      const { chats, messagesCache, selectedUser } = useChatStore.getState();
       
       const chatIndex = chats.findIndex(chat => chat.lastMessage?._id === messageId);
       if (chatIndex !== -1) {
         const lastReaction = reactions?.length > 0 ? reactions[reactions.length - 1] : null;
+        
+        let lastReactionUserName = null;
+        if (lastReaction) {
+          const userId = lastReaction.userId?._id || lastReaction.userId;
+          const reactionUser = chats[chatIndex].user?._id === userId 
+            ? chats[chatIndex].user 
+            : null;
+          lastReactionUserName = reactionUser?.fullName?.split(' ')[0] || reactionUser?.fullName || null;
+        }
         
         const updatedChats = [...chats];
         updatedChats[chatIndex] = {
@@ -180,10 +189,23 @@ function ChatsList({ compact = false }) {
             ...updatedChats[chatIndex].lastMessage,
             reactions,
             lastReactionEmoji: lastReaction?.emoji || null,
-            lastReactionUser: lastReaction?.userId?._id || lastReaction?.userId || null
+            lastReactionUser: lastReaction?.userId?._id || lastReaction?.userId || null,
+            lastReactionUserName: lastReactionUserName
           }
         };
         useChatStore.setState({ chats: updatedChats });
+      }
+      
+      if (selectedUser && messagesCache[selectedUser._id]) {
+        const updatedMessages = messagesCache[selectedUser._id].map(msg =>
+          msg._id === messageId ? { ...msg, reactions } : msg
+        );
+        useChatStore.setState({
+          messagesCache: {
+            ...messagesCache,
+            [selectedUser._id]: updatedMessages
+          }
+        });
       }
     };
     
@@ -264,6 +286,39 @@ const msg = typeof lastMsg !== "undefined" ? lastMsg : chat.lastMessage;
     return `${chat.user?.fullName}\n${lastMessage}${time ? `\n${time}` : ''}${lastSeen ? `\n${lastSeen}` : ''}`;
   };
 
+  // 🔥 Función para obtener el texto de reacción estilo WhatsApp
+  const getReactionText = (chat) => {
+    const lastMessage = chat.lastMessage;
+    if (!lastMessage) return null;
+    
+    // Usar el nombre guardado en lastReactionUserName
+    if (lastMessage.lastReactionUserName) {
+      if (lastMessage.lastReactionUser === authUser._id) {
+        return `Tú reaccionaste con ${lastMessage.lastReactionEmoji}`;
+      }
+      return `${lastMessage.lastReactionUserName} reaccionó con ${lastMessage.lastReactionEmoji}`;
+    }
+    
+    // Fallback: calcular desde reactions
+    const reactions = lastMessage.reactions;
+    if (!reactions || reactions.length === 0) return null;
+    
+    const lastReaction = reactions[reactions.length - 1];
+    const reactionEmoji = lastReaction?.emoji;
+    const reactionUserId = lastReaction?.userId?._id || lastReaction?.userId;
+    
+    if (reactionUserId?.toString() === authUser._id?.toString()) {
+      return `Tú reaccionaste con ${reactionEmoji}`;
+    }
+    
+    if (chat.user?._id === reactionUserId?.toString()) {
+      const firstName = chat.user.fullName?.split(' ')[0] || chat.user.fullName;
+      return `${firstName} reaccionó con ${reactionEmoji}`;
+    }
+    
+    return null;
+  };
+
   const getReactionEmoji = (chat) => {
     if (chat.lastMessage?.lastReactionEmoji) {
       return chat.lastMessage.lastReactionEmoji;
@@ -285,6 +340,7 @@ const msg = typeof lastMsg !== "undefined" ? lastMsg : chat.lastMessage;
           const lastMessageStatus = chat.lastMessage?.status;
           const isDeleted = chat.lastMessage?.isDeleted || chat.lastMessage?.text === "Mensaje eliminado";
           const reactionEmoji = getReactionEmoji(chat);
+          const reactionText = getReactionText(chat);
           
           return (
             <div
@@ -296,16 +352,18 @@ const msg = typeof lastMsg !== "undefined" ? lastMsg : chat.lastMessage;
               title={compact ? getCompactTooltip(chat) : ""}
             >
               <div className="flex-shrink-0">
-                <div className="w-12 h-12 rounded-full bg-slate-600 flex items-center justify-center overflow-hidden">
-                  <img 
-                    src={chat.user?.profilePic || "/avatar.png"} 
-                    alt={chat.user?.fullName} 
-                    className="w-full h-full object-cover"
-                  />
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-full bg-slate-600 flex items-center justify-center overflow-hidden">
+                    <img 
+                      src={chat.user?.profilePic || "/avatar.png"} 
+                      alt={chat.user?.fullName} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  {isOnline && (
+                    <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-slate-800"></div>
+                  )}
                 </div>
-                {isOnline && (
-                  <div className="relative -mt-3 ml-8 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-slate-800"></div>
-                )}
               </div>
 
               {!compact && (
@@ -332,12 +390,18 @@ const msg = typeof lastMsg !== "undefined" ? lastMsg : chat.lastMessage;
                     {isMyLastMessage && lastMessageStatus && !isDeleted && (
                       <MessageStatusIcon status={lastMessageStatus} className="w-3.5 h-3.5 flex-shrink-0" />
                     )}
-                    {reactionEmoji && (
-                      <span className="text-sm flex-shrink-0">{reactionEmoji}</span>
+                    
+                    {/* 🔥 Mostrar texto de reacción estilo WhatsApp */}
+                    {reactionText && !isDeleted ? (
+                      <p className={`text-sm truncate ${reactionText.includes('Tú') ? 'text-cyan-400' : 'text-slate-400'}`}>
+                        {reactionText}
+                      </p>
+                    ) : (
+                      <p className={`text-sm truncate ${isDeleted ? 'text-slate-500 italic' : 'text-slate-400'}`}>
+                        {formatLastMessage(chat)}
+                      </p>
                     )}
-                    <p className={`text-sm truncate ${isDeleted ? 'text-slate-500 italic' : 'text-slate-400'}`}>
-                      {formatLastMessage(chat)}
-                    </p>
+                    
                   </div>
                   
                   {chat.unreadCount > 0 && (

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, PlayIcon, XIcon, MoreVertical } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, PlayIcon, XIcon, MoreVertical } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import { useConfigStore } from "../store/useConfigStore";
 import useMessageStatus from "../hooks/useMessageStatus";
 import useMessageActions from "../hooks/useMessageActions";
 import useMessageReactions from "../hooks/useMessageReactions";
+import useMessageSound from "../hooks/useMessageSound";
 import ChatHeader from "./ChatHeader";
 import NoChatHistoryPlaceholder from "./NoChatHistoryPlaceholder";
 import MessageInput from "./MessageInput";
@@ -32,19 +33,26 @@ function ChatContainer() {
   const [selectedMessageInfo, setSelectedMessageInfo] = useState(null);
   const [pendingEditMessage, setPendingEditMessage] = useState(null);
   
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  
   const {
     selectedUser,
     getMessagesByUserId,
     messagesCache,
     isMessagesLoading,
     updateMessageStatus,
+    loadMoreMessages,
+    messagesPagination,
+    isSoundEnabled
   } = useChatStore();
   
   const { authUser, socket } = useAuthStore();
   const { chatWallpaper, themeColor, receiverColor, isTextBold, chatFontSize } = useConfigStore();
-  const { sendMessageRead, sendChatOpened } = useMessageStatus();
+  const { sendChatOpened } = useMessageStatus();
   const { copyMessageText, getMessageInfo, editMessage, deleteMessage, canEditMessage } = useMessageActions();
   const { addReaction, removeReaction, getUserReaction, availableEmojis } = useMessageReactions();
+  const { playMessageSound } = useMessageSound();
   
   const messageEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
@@ -52,6 +60,7 @@ function ChatContainer() {
   const isFirstLoad = useRef(true);
   const chatOpenedSent = useRef(false);
   const lastSelectedUserId = useRef(null);
+  const isUserNearBottom = useRef(true);
 
   // Obtener mensajes de la caché
   const messages = selectedUser ? (messagesCache[selectedUser._id] || []) : [];
@@ -67,7 +76,64 @@ function ChatContainer() {
 
   const mediaMessages = messages.filter((message) => message.image);
 
-  // Abrir menú contextual desde el botón
+  // 👈 Sonido cuando llega un mensaje
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleNewMessageForSound = (newMessage) => {
+      const isForMe = newMessage.receiverId === authUser._id;
+      
+      if (isForMe && isSoundEnabled) {
+        console.log("🔊 Reproduciendo sonido de mensaje recibido");
+        playMessageSound();
+      }
+    };
+    
+    socket.on("newMessage", handleNewMessageForSound);
+    
+    return () => {
+      socket.off("newMessage", handleNewMessageForSound);
+    };
+  }, [socket, authUser, isSoundEnabled, playMessageSound]);
+
+  // 👈 FUNCIÓN PARA DETECTAR SCROLL Y CARGAR MÁS
+  const handleScroll = async () => {
+    if (!messagesContainerRef.current) return;
+    
+    const container = messagesContainerRef.current;
+    const scrollTop = container.scrollTop;
+    const scrollHeight = container.scrollHeight;
+    const clientHeight = container.clientHeight;
+    
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 200;
+    isUserNearBottom.current = isNearBottom;
+    
+    setShowScrollButton(!isNearBottom && messages.length > 10);
+    
+    if (scrollTop < 100 && !isLoadingMore && selectedUser) {
+      const pagination = messagesPagination[selectedUser._id];
+      if (pagination?.hasMore) {
+        setIsLoadingMore(true);
+        
+        const previousHeight = container.scrollHeight;
+        
+        await loadMoreMessages(selectedUser._id);
+        
+        setTimeout(() => {
+          const newHeight = container.scrollHeight;
+          const heightDiff = newHeight - previousHeight;
+          container.scrollTop = heightDiff;
+          setIsLoadingMore(false);
+        }, 100);
+      }
+    }
+  };
+
+  // 👈 FUNCIÓN PARA IR AL ÚLTIMO MENSAJE
+  const scrollToBottom = () => {
+    messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   const openMenu = (e, message) => {
     e.stopPropagation();
     if (message.isDeleted || message.text === "Mensaje eliminado") return;
@@ -82,13 +148,9 @@ function ChatContainer() {
     });
   };
 
-  // MODIFICADO: Cierre del menú sin limpiar selectedMessage inmediatamente
   const closeContextMenu = () => {
     setContextMenu(null);
-    // ✅ No limpiar selectedMessage aquí para que el modal pueda usarlo
   };
-
-  // ==================== ACCIONES DEL MENÚ ====================
 
   const handleCopy = async (text) => {
     await copyMessageText(text, selectedMessage?._id);
@@ -104,7 +166,6 @@ function ChatContainer() {
     setTimeout(() => setSelectedMessage(null), 100);
   };
 
-  // ✅ CORREGIDO: Guardar el mensaje antes de cerrar el menú
   const handleEdit = () => {
     if (!selectedMessage) return;
     
@@ -115,13 +176,9 @@ function ChatContainer() {
       return;
     }
     
-    // Guardar una copia del mensaje antes de cerrar el menú
     const messageToEdit = selectedMessage;
-    
-    // Cerrar el menú
     setContextMenu(null);
     
-    // Abrir el modal con el mensaje guardado
     setTimeout(() => {
       setPendingEditMessage(messageToEdit);
       setShowEditModal(true);
@@ -142,7 +199,6 @@ function ChatContainer() {
     await deleteMessage(messageId, true);
   };
 
-  // ✅ CORREGIDO: Usar pendingEditMessage en lugar de selectedMessage
   const handleSaveEdit = async (newText) => {
     if (!pendingEditMessage) return;
     
@@ -208,8 +264,6 @@ function ChatContainer() {
     setTimeout(() => setSelectedMessage(null), 100);
   };
 
-  // ==================== REACCIONES ====================
-
   const handleAddReaction = async (messageId, emoji) => {
     await addReaction(messageId, emoji);
   };
@@ -218,7 +272,14 @@ function ChatContainer() {
     await removeReaction(messageId);
   };
 
-  // ==================== EFECTOS ====================
+  // 👈 EFECTO PARA DETECTAR SCROLL
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [selectedUser, isLoadingMore]);
 
   useEffect(() => {
     if (selectedUser && selectedUser._id && socket && socket.connected) {
@@ -260,7 +321,7 @@ function ChatContainer() {
   useEffect(() => {
     if (selectedUser && selectedUser._id) {
       console.log("Cargando mensajes para:", selectedUser.fullName);
-      getMessagesByUserId(selectedUser._id);
+      getMessagesByUserId(selectedUser._id, false);
       isFirstLoad.current = true;
       chatOpenedSent.current = false;
     }
@@ -398,12 +459,21 @@ const openMediaModal = (mediaUrl, index) => {
         <ChatHeader />
         
         <div 
-            ref={messagesContainerRef}
-            className="flex-1 chat-container-scroll w-full min-h-0"
-          >
+          ref={messagesContainerRef}
+          className="flex-1 chat-container-scroll w-full min-h-0 relative"
+        >
           {messages.length > 0 && !isMessagesLoading ? (
             <div className="w-full min-h-full flex flex-col justify-end overflow-x-hidden">
               <div className="w-full p-2 md:p-4 space-y-3 overflow-x-hidden">
+                
+                {isLoadingMore && (
+                  <div className="flex justify-center py-2">
+                    <div className="bg-slate-700/50 rounded-full px-3 py-1">
+                      <span className="text-xs text-slate-400">Cargando mensajes antiguos...</span>
+                    </div>
+                  </div>
+                )}
+                
                 {messages.map((msg) => {
                   const isDeleted = isMessageDeleted(msg);
                   const isOwnMessage = msg.senderId?.toString() === authUser._id?.toString();
@@ -414,7 +484,6 @@ const openMediaModal = (mediaUrl, index) => {
                       key={msg._id + (msg.isEdited ? '-edited-' + msg.editedAt : '')}
                       className={`group relative flex ${isOwnMessage ? "justify-end" : "justify-start"} items-center gap-2 overflow-x-hidden`}
                     >
-                      {/* Botón de reacción flotante */}
                       {!isDeleted && (
                         <div className={`${isOwnMessage ? 'order-first' : 'order-last'} opacity-0 group-hover:opacity-100 transition-opacity`}>
                           <EmojiPickerButton
@@ -425,7 +494,6 @@ const openMediaModal = (mediaUrl, index) => {
                         </div>
                       )}
                       
-                      {/* Burbuja de mensaje */}
                       <div
                         className={`relative max-w-[85%] sm:max-w-[75%] md:max-w-[65%] lg:max-w-[55%] rounded-2xl px-4 py-3 shadow-md break-words ${
                           isOwnMessage
@@ -478,17 +546,11 @@ const openMediaModal = (mediaUrl, index) => {
                             {isDeleted ? "Mensaje eliminado" : msg.text}
                           </p>
                         )}
-                        
-                        {msg.isEdited && !isDeleted && (
-                          <span 
-                            className="text-[10px] opacity-60 ml-1 inline-flex items-center gap-0.5"
-                            title={`Editado ${formatMessageTime(msg.editedAt)}`}
-                          >
-                            (editado)
-                          </span>
-                        )}
-                        
+
                         <div className={`text-xs mt-2 opacity-75 flex items-center gap-1 flex-wrap ${isOwnMessage ? "justify-end" : "justify-start"}`}>
+                          {msg.isEdited && !isDeleted && (
+                            <span className="text-[10px] opacity-60">Editado</span>
+                          )}
                           <span>{formatMessageTime(msg.createdAt)}</span>
                           {msg.isOptimistic && " ⏳"}
                           {isOwnMessage && msg.status && !isDeleted && !msg.isOptimistic && (
@@ -496,7 +558,6 @@ const openMediaModal = (mediaUrl, index) => {
                           )}
                         </div>
                         
-                        {/* Reacciones debajo del mensaje */}
                         {msg.reactions && msg.reactions.length > 0 && !isDeleted && (
                           <MessageReactions
                             reactions={msg.reactions}
@@ -509,7 +570,6 @@ const openMediaModal = (mediaUrl, index) => {
                         )}
                       </div>
                       
-                      {/* Botón de menú (tres puntos) */}
                       {!isDeleted && (
                         <button
                           onClick={(e) => openMenu(e, msg)}
@@ -534,10 +594,20 @@ const openMediaModal = (mediaUrl, index) => {
           )}
         </div>
 
+        {showScrollButton && (
+          <button
+            onClick={scrollToBottom}
+            className="absolute bottom-20 right-4 p-2 bg-cyan-500 rounded-full shadow-lg hover:bg-cyan-600 transition-all z-10 animate-fade-in"
+            title="Ir al último mensaje"
+          >
+            <ChevronDown className="w-4 h-4 text-white" />
+          </button>
+        )}
+
         <MessageInput />
       </div>
 
-      {selectedMedia && (
+{selectedMedia && (
         <div
           className={`fixed inset-0 z-[999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-200 ${
             isMediaModalVisible ? "opacity-100" : "opacity-0"
@@ -606,7 +676,6 @@ const openMediaModal = (mediaUrl, index) => {
         </div>
       )}
 
-      {/* Menú contextual */}
       {contextMenu && selectedMessage && (
         <MessageContextMenu
           message={selectedMessage}
@@ -628,7 +697,6 @@ const openMediaModal = (mediaUrl, index) => {
         />
       )}
 
-      {/* Modal de información */}
       {showInfoModal && selectedMessageInfo && (
         <MessageInfoModal
           message={selectedMessageInfo}
@@ -639,7 +707,6 @@ const openMediaModal = (mediaUrl, index) => {
         />
       )}
 
-      {/* Modal de edición - ✅ USAR pendingEditMessage */}
       {showEditModal && pendingEditMessage && (
         <EditMessageModal
           message={pendingEditMessage}
