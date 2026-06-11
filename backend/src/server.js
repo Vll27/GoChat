@@ -156,15 +156,22 @@ app.use("/api/message-status", apiLimiter, messageStatusRoutes);
 // ==================== ACOPLAMIENTO MONOLÍTICO: ARCHIVOS ESTÁTICOS ====================
 
 if (process.env.NODE_ENV === "production" || ENV.NODE_ENV === "production") {
-  // Salimos de src, salimos de backend, y entramos a frontend/dist
-  const distPath = path.resolve(__dirname, "..", "..", "frontend", "dist");
+  // Salimos de 'src' y 'backend' usando un solo salto relativo correcto basado en tu estructura
+  // de forma que apunte exactamente a /opt/render/project/src/frontend/dist
+  const distPath = path.resolve(__dirname, "../../frontend/dist");
   
   console.log("📂 Buscando recursos estáticos en la ruta absoluta:", distPath);
 
+  // Servir los recursos compilados de React
   app.use(express.static(distPath));
 
+  // Catch-All para delegar al React Router
   app.get("*", (req, res) => {
     res.sendFile(path.join(distPath, "index.html"));
+  });
+} else {
+  app.get("/", (req, res) => {
+    res.status(200).json({ mensaje: "API del Servidor corriendo en modo de desarrollo local." });
   });
 }
 
