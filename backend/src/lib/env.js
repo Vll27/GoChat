@@ -1,4 +1,12 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "path";
+
+const __dirname = path.resolve();
+
+// Cargamos el archivo físico backend/.env SOLO si no estamos en producción (tu PC)
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config({ path: path.resolve(__dirname, "backend", ".env") });
+}
 
 export const ENV = {
   // Server
@@ -7,12 +15,10 @@ export const ENV = {
   
   // Database
   MONGO_URI: process.env.MONGO_URI,
-  NODE_ENV: process.env.NODE_ENV,
   JWT_SECRET: process.env.JWT_SECRET,
   CLIENT_URL: process.env.CLIENT_URL,
   
   // Auth
-  JWT_SECRET: process.env.JWT_SECRET,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "7d",
   
   // Email (Resend)
@@ -38,32 +44,32 @@ const criticalEnvVars = ['MONGO_URI', 'JWT_SECRET'];
 const missingCritical = criticalEnvVars.filter(key => !ENV[key]);
 
 if (missingCritical.length > 0) {
-  console.error('\n ERROR: Faltan variables críticas en .env:\n');
+  console.error('\n ❌ ERROR: Faltan variables críticas en el entorno:\n');
   missingCritical.forEach(key => {
     console.error(`   → ${key}`);
   });
-  console.error('\n Por favor, completa estas variables en backend/.env\n');
+  console.error('\n Por favor, completa estas variables en backend/.env o en el panel de Render\n');
   
   if (ENV.NODE_ENV === 'production') {
     process.exit(1);
   }
 }
 
-//  Advertencias para variables opcionales pero importantes
+// Advertencias para variables opcionales pero importantes
 if (!ENV.CLOUDINARY_CLOUD_NAME) {
-  console.warn('\n  ADVERTENCIA: Cloudinary no configurado');
+  console.warn('\n ⚠️ ADVERTENCIA: Cloudinary no configurado');
   console.warn('   Las imágenes NO funcionarán correctamente');
   console.warn('   Configura CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET\n');
 }
 
 if (!ENV.RESEND_API_KEY) {
-  console.warn('\n  ADVERTENCIA: Resend no configurado');
+  console.warn('\n ⚠️ ADVERTENCIA: Resend no configurado');
   console.warn('   Los emails de verificación NO funcionarán\n');
 }
 
-//  Mostrar configuración actual (solo en desarrollo)
+// Mostrar configuración actual (solo en desarrollo)
 if (ENV.NODE_ENV === 'development') {
-  console.log('\n Configuración actual:');
+  console.log('\n 📡 Configuración actual:');
   console.log(`   → Puerto: ${ENV.PORT}`);
   console.log(`   → Entorno: ${ENV.NODE_ENV}`);
   console.log(`   → MongoDB: ${ENV.MONGO_URI ? 'Configurado' : ' No configurado'}`);
