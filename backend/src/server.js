@@ -160,21 +160,17 @@ if (process.env.NODE_ENV === "production" || ENV.NODE_ENV === "production") {
   
   console.log("📂 Buscando recursos estáticos en la ruta absoluta (CWD):", distPath);
 
-  // 🚨 Servir archivos estáticos con opciones estrictas de caché y redirección
-  app.use(express.static(distPath, {
-    dotfiles: 'ignore',
-    etag: true,
-    extensions: ['html', 'js', 'css'],
-    index: false // Evita que busque el index de forma automática antes de tiempo
-  }));
+  // 1. Servir archivos estáticos de forma prioritaria y ultra limpia
+  app.use(express.static(distPath));
 
-  // Catch-All (Ruta comodín): Apunta directo al index.html real
+  // 2. Ruta específica para assets: Si un JS o CSS no existe, que tire 404 real y NO el HTML
+  app.get("/assets/*", (req, res) => {
+    res.status(404).send("Archivo estático no encontrado en el dist de Render");
+  });
+
+  // 3. Catch-All (Solo para rutas de navegación de React Router)
   app.get("*", (req, res) => {
     res.sendFile(path.join(distPath, "index.html"));
-  });
-} else {
-  app.get("/", (req, res) => {
-    res.status(200).json({ mensaje: "API del Servidor corriendo en modo de desarrollo local." });
   });
 }
 
