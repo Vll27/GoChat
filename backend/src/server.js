@@ -89,7 +89,8 @@ const corsOptions = {
       "http://localhost:5174",
       "http://127.0.0.1:5173",
       "http://192.168.0.6:5173",
-      "http://localhost:5001", // 👈 Agregá este maje aquí para que deje de joder
+      "http://localhost:5001", // Ñocalhost, ahora backend sirve frontend también.
+      "https://gochat-wl9s.onrender.com", // Para render
       ENV.CLIENT_URL
     ];
 
