@@ -156,10 +156,10 @@ app.use("/api/message-status", apiLimiter, messageStatusRoutes);
 // ==================== ACOPLAMIENTO MONOLÍTICO: ARCHIVOS ESTÁTICOS ====================
 
 if (process.env.NODE_ENV === "production" || ENV.NODE_ENV === "production") {
-  // path.resolve asegura la ruta absoluta desde la raíz del contenedor de Render
+  // path.resolve(__dirname, "frontend", "dist") genera la ruta absoluta nativa desde la raíz del proyecto
   const distPath = path.resolve(__dirname, "frontend", "dist");
   
-  // Servir de forma nativa los recursos compilados de React
+  // 🚨 REGLA DE ORO: Servir los archivos estáticos ANTES del catch-all '*'
   app.use(express.static(distPath));
 
   // Catch-All (Ruta comodín): Delega el manejo de URLs al React Router de la SPA
