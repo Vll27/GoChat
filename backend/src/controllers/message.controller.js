@@ -5,6 +5,11 @@ import Message from "../models/Message.js";
 import User from "../models/User.js";
 import { Readable } from "stream";
 
+// Utilidad perimetral para evitar ataques ReDoS (Regex Denial of Service)
+const escapeRegex = (string) => {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
 const uploadBufferToCloudinary = (buffer) => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
@@ -27,26 +32,30 @@ export const getAllContacts = async (req, res) => {
     const loggedInUserId = req.user._id;
     const { search } = req.query;
 
+    const cleanSearch = search && typeof search === "string" ? search.trim() : "";
+
     const me = await User.findById(loggedInUserId).select("contacts").lean();
-    if (!me) return res.status(404).json({ message: "Usuario no encontrado" });
+    if (!me) return res.status(404).json({ message: "Usuario autenticado no encontrado." });
 
     if (!me.contacts?.length) {
       return res.status(200).json([]);
     }
 
     const filter = { _id: { $in: me.contacts } };
-    if (search) {
+    
+    if (cleanSearch) {
+      const safeSearch = escapeRegex(cleanSearch);
       filter.$or = [
-        { fullName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
+        { fullName: { $regex: safeSearch, $options: "i" } },
+        { email: { $regex: safeSearch, $options: "i" } },
       ];
     }
 
     const contacts = await User.find(filter).select("-password").lean();
     res.status(200).json(contacts);
   } catch (error) {
-    console.log("Error en getAllContacts:", error);
-    res.status(500).json({ message: "Error del servidor" });
+    console.error("❌ Error en getAllContacts:", error.message);
+    res.status(500).json({ message: "Error interno del servidor al obtener la lista de contactos." });
   }
 };
 
@@ -55,23 +64,26 @@ export const searchUsers = async (req, res) => {
     const loggedInUserId = req.user._id;
     const { query } = req.query;
 
-    if (!query?.trim()) {
+    const cleanQuery = query && typeof query === "string" ? query.trim() : "";
+
+    if (!cleanQuery) {
       return res.status(200).json([]);
     }
 
+    const safeQuery = escapeRegex(cleanQuery);
     const filter = {
       _id: { $ne: loggedInUserId },
       $or: [
-        { fullName: { $regex: query, $options: "i" } },
-        { email: { $regex: query, $options: "i" } },
+        { fullName: { $regex: safeQuery, $options: "i" } },
+        { email: { $regex: safeQuery, $options: "i" } },
       ],
     };
 
     const results = await User.find(filter).select("-password").limit(20).lean();
     res.status(200).json(results);
   } catch (error) {
-    console.error("Error en searchUsers:", error);
-    res.status(500).json({ message: "Error del servidor" });
+    console.error("❌ Error en searchUsers:", error.message);
+    res.status(500).json({ message: "Error interno del servidor durante la búsqueda de usuarios." });
   }
 };
 
@@ -80,11 +92,17 @@ export const getMessagesByUserId = async (req, res) => {
     const myId = req.user._id;
     const { id: userToChatId } = req.params;
     const { limit = 20, before } = req.query;
-    
+
+    const cleanUserToChatId = userToChatId && typeof userToChatId === "string" ? userToChatId.trim() : "";
+
+    if (!cleanUserToChatId) {
+      return res.status(400).json({ message: "Se requiere un ID de conversación válido." });
+    }
+
     const query = {
       $or: [
-        { senderId: myId, receiverId: userToChatId },
-        { senderId: userToChatId, receiverId: myId },
+        { senderId: myId, receiverId: cleanUserToChatId },
+        { senderId: cleanUserToChatId, receiverId: myId },
       ],
     };
     
@@ -98,20 +116,17 @@ export const getMessagesByUserId = async (req, res) => {
       .lean();
     
     const orderedMessages = messages.reverse();
-    
     const hasMore = messages.length === parseInt(limit);
     const nextCursor = hasMore && messages.length > 0 
       ? messages[0].createdAt 
       : null;
+
+    // 🔴 CAMBIA ESTO: Quitá el objeto estructurado y mandá solo el array
+    res.status(200).json(orderedMessages); 
     
-    res.status(200).json({
-      messages: orderedMessages,
-      hasMore,
-      nextCursor
-    });
   } catch (error) {
-    console.log("Error en getMessagesByUserId: ", error.message);
-    res.status(500).json({ error: "Error interno del servidor" });
+    console.error("❌ Error en el controlador getMessagesByUserId:", error.message);
+    res.status(500).json({ message: "Error interno del servidor al recuperar el historial de mensajes." });
   }
 };
 
@@ -122,33 +137,41 @@ export const sendMessage = async (req, res) => {
     const senderId = req.user._id;
     const imageFile = req.file;
 
-    // Validación unificada
-    const finalValidText = text || message || "";
-    const finalValidImage = imageFile || image || null;
+// Saneamiento riguroso de inputs (Aporte de tu compañero)
+    const rawText = text || message || "";
+    const cleanText = typeof rawText === "string" ? rawText.trim() : "";
+    const cleanReceiverId = receiverId && typeof receiverId === "string" ? receiverId.trim() : "";
 
-    if (!finalValidText && !finalValidImage) {
+    const finalValidImage = imageFile || (typeof image === "string" ? image.trim() : null);
+
+    // Validación unificada con soporte de video (Tu lógica)
+    if (!cleanText && !finalValidImage) {
       return res.status(400).json({ message: "Se requiere texto, imagen o video." });
     }
     
-    if (senderId.equals(receiverId)) {
+    if (!cleanReceiverId) {
+      return res.status(400).json({ message: "El ID del receptor es inválido o está vacío." });
+    }
+
+    if (senderId.equals(cleanReceiverId)) {
       return res.status(400).json({ message: "No puedes enviarte mensajes a ti mismo." });
     }
     
-    const receiverExists = await User.exists({ _id: receiverId });
+    const receiverExists = await User.exists({ _id: cleanReceiverId });
     if (!receiverExists) {
-      return res.status(404).json({ message: "Receptor no encontrado." });
+      return res.status(404).json({ message: "El usuario receptor no existe en la plataforma." });
     }
 
     let imageUrl = null;
     let mediaType;
 
-    // Lógica híbrida para subir buffer (tuya) o base64 (de tu compañero) detectando videos
+    // Lógica híbrida para subir buffer o base64 detectando videos
     if (imageFile?.buffer) {
       const uploadResponse = await uploadBufferToCloudinary(imageFile.buffer);
       imageUrl = uploadResponse.secure_url;
-      mediaType = imageFile.mimetype.startsWith("video/") ? "video" : "image";
-    } else if (typeof image === "string" && image.trim() !== "") {
-      const uploadResponse = await cloudinary.uploader.upload(image, {
+      mediaType = imageFile.mimetype.startsWith("video/") ? "video" : "image"; // 👈 Tu detección de video intacta
+    } else if (typeof finalValidImage === "string" && finalValidImage !== "") {
+      const uploadResponse = await cloudinary.uploader.upload(finalValidImage, { // 👈 Variable limpia de tu compañero
         folder: "chat-images",
         timeout: 60000,
         resource_type: "auto"
@@ -159,8 +182,8 @@ export const sendMessage = async (req, res) => {
 
     const newMessage = new Message({
       senderId,
-      receiverId,
-      text: finalValidText,
+      receiverId: cleanReceiverId,
+      text: cleanText,
       image: imageUrl,
       mediaType,
       status: "sent",
@@ -168,7 +191,7 @@ export const sendMessage = async (req, res) => {
 
     await newMessage.save();
 
-    const receiverSocketId = getReceiverSocketId(receiverId);
+    const receiverSocketId = getReceiverSocketId(cleanReceiverId);
     
     if (receiverSocketId) {
       const senderInfo = await User.findById(senderId).select("fullName email profilePic").lean();
@@ -179,15 +202,15 @@ export const sendMessage = async (req, res) => {
       };
       
       io.to(receiverSocketId).emit("newMessage", messageWithSender);
-      console.log(`Mensaje enviado a receptor ${receiverId} (socket: ${receiverSocketId})`);
+      console.log(`Mensaje enviado a receptor ${cleanReceiverId} (socket: ${receiverSocketId})`);
     } else {
-      console.log(`Receptor ${receiverId} no esta online, mensaje guardado como sent`);
+      console.log(`Receptor ${cleanReceiverId} no está online, mensaje guardado como sent`);
     }
 
     res.status(201).json(newMessage);
   } catch (error) {
-    console.log("Error en sendMessage: ", error.message);
-    res.status(500).json({ error: "Error interno del servidor" });
+    console.error("❌ Error en el controlador sendMessage:", error.message);
+    res.status(500).json({ message: "Error interno del servidor al procesar y enviar el mensaje." });
   }
 };
 
@@ -195,6 +218,7 @@ export const getChatPartners = async (req, res) => {
   try {
     const userId = req.user._id;
     
+    // 1. Buscamos los últimos mensajes del usuario
     const lastMessages = await Message.find({
       $or: [{ senderId: userId }, { receiverId: userId }]
     })
@@ -206,46 +230,59 @@ export const getChatPartners = async (req, res) => {
       return res.status(200).json([]);
     }
     
+    // 2. Extraemos los IDs de las personas con las que se chateó
     const partnerIds = [...new Set(
-      lastMessages.flatMap(msg => 
-        msg.senderId.toString() === userId.toString() 
-          ? [msg.receiverId.toString()] 
-          : [msg.senderId.toString()]
-      )
+      lastMessages.flatMap(msg => {
+        const sId = msg.senderId?.toString();
+        const rId = msg.receiverId?.toString();
+        return sId === userId.toString() ? [rId] : [sId];
+      }).filter(Boolean) // Limpia cualquier valor nulo o undefined por si acaso
     )];
     
+    // 3. Traemos la información de esos usuarios
     const partners = await User.find({ _id: { $in: partnerIds } })
       .select("fullName email profilePic lastSeen lastSeenStatus")
       .lean();
       
-    const partnerMap = new Map(partners.map(p => [p._id.toString(), p]));
+    // 4. Creamos el mapa asegurando compatibilidad con _id o id plano
+    const partnerMap = new Map();
+    partners.forEach(p => {
+      const idStr = p._id ? p._id.toString() : p.id?.toString();
+      if (idStr) partnerMap.set(idStr, p);
+    });
     
     const chats = [];
     const seenChats = new Set();
     
+    // 5. Construimos la estructura final para el frontend
     for (const msg of lastMessages) {
-      const partnerId = msg.senderId.toString() === userId.toString() 
-        ? msg.receiverId.toString() 
-        : msg.senderId.toString();
+      const sIdStr = msg.senderId?.toString();
+      const rIdStr = msg.receiverId?.toString();
       
-      if (seenChats.has(partnerId)) continue;
+      const partnerId = sIdStr === userId.toString() ? rIdStr : sIdStr;
+      
+      if (!partnerId || seenChats.has(partnerId)) continue;
       seenChats.add(partnerId);
       
       const partner = partnerMap.get(partnerId);
       if (!partner) continue;
       
+      // BONUS: De una vez calculamos si este último mensaje está sin leer
+      // Es un mensaje sin leer si el emisor NO es el usuario actual y el estado no es 'read'
+      const isUnread = msg.senderId.toString() !== userId.toString() && msg.status !== "read";
+
       chats.push({
         _id: partnerId,
         user: partner,
         lastMessage: msg,
-        unreadCount: 0
+        unreadCount: isUnread ? 1 : 0 // Esto le da vida a las notificaciones en el cliente
       });
     }
     
     res.status(200).json(chats);
   } catch (error) {
-    console.error("Error en getChatPartners: ", error.message);
-    res.status(500).json({ error: "Error interno del servidor" });
+    console.error("❌ Error en getChatPartners:", error.message);
+    res.status(500).json({ message: "Error interno del servidor al construir los canales de chat activos." });
   }
 };
 
@@ -257,7 +294,7 @@ export const updateMessageStatus = async (req, res) => {
 
     const validStatuses = ["sent", "delivered", "read"];
     if (!validStatuses.includes(status)) {
-      return res.status(400).json({ message: "Estado no valido" });
+      return res.status(400).json({ message: "Estado no válido" });
     }
 
     const message = await Message.findById(messageId);
@@ -316,7 +353,7 @@ export const markMessagesAsRead = async (req, res) => {
     }
 
     res.status(200).json({ 
-      message: "Mensajes marcados como leidos", 
+      message: "Mensajes marcados como leídos", 
       count: result.modifiedCount 
     });
   } catch (error) {

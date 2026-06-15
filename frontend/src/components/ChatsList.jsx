@@ -18,13 +18,26 @@ function ChatsList({ compact = false }) {
     updateMessageStatus,
     updateMultipleMessagesStatus,
   } = useChatStore();
+
   const { onlineUsers, socket, authUser } = useAuthStore();
-  const isMounted = useRef(true);
 
   useEffect(() => {
-    isMounted.current = true;
-    if (authUser && isMounted.current) {
-      console.log("Cargando chats...");
+    // Si no hay un usuario autenticado, salite inmediatamente y frená la petición huérfana ✋
+    if (!authUser) return;
+
+    console.log("📋 Cargando chats...");
+    getMyChatPartners();
+  }, [getMyChatPartners, authUser]);
+
+  useEffect(() => {
+    // Si el socket o el authUser no existen, nos salimos de inmediato ✋
+    if (!socket || !authUser) return; 
+    
+    const handleChatsUpdated = () => {
+      // GUARDIÁN: Si el usuario ya le dio logout y no está autenticado, frenamos la petición de inmediato
+      if (!useAuthStore.getState().authUser) return;
+
+      console.log("🔄 Actualizando lista de chats...");
       getMyChatPartners();
     }
     return () => {
@@ -36,8 +49,10 @@ function ChatsList({ compact = false }) {
     if (!socket || !authUser) return;
     
     const handleUserStatusChange = ({ userId, status, lastSeen }) => {
-      if (!authUser || !isMounted.current) return;
-      
+      // GUARDIÁN: Evitar mutar el estado de Zustand si ya nos estamos saliendo
+      if (!useAuthStore.getState().authUser) return;
+
+      console.log(`👤 Usuario ${userId} cambió a: ${status}`);
       useChatStore.setState((state) => ({
         chats: state.chats.map(chat => 
           chat.user?._id === userId 
@@ -66,177 +81,8 @@ function ChatsList({ compact = false }) {
     return () => {
       socket.off("userStatusChanged", handleUserStatusChange);
     };
-  }, [socket, authUser]);
-
-  useEffect(() => {
-    if (!socket || !authUser) return;
-    
-    const handleNewMessage = (newMessage) => {
-      if (newMessage.receiverId === authUser._id) {
-        console.log("ChatsList: Nuevo mensaje recibido, actualizando lista...");
-        getMyChatPartners();
-      }
-    };
-    
-    socket.on("newMessage", handleNewMessage);
-    
-    return () => {
-      socket.off("newMessage", handleNewMessage);
-    };
-  }, [socket, authUser, getMyChatPartners]);
-
-  useEffect(() => {
-    if (!socket || !authUser) return;
-    
-    const handleMessageStatusUpdated = ({ messageId, status }) => {
-      updateMessageStatus(messageId, status);
-      
-      const { messages, chats } = useChatStore.getState();
-      const updatedMessage = messages.find(m => m._id === messageId);
-      if (!updatedMessage) return;
-      
-      const chatIndex = chats.findIndex(chat => chat.user?._id === updatedMessage.senderId);
-      if (chatIndex !== -1 && chats[chatIndex].lastMessage?._id === messageId) {
-        const updatedChats = [...chats];
-        updatedChats[chatIndex] = {
-          ...updatedChats[chatIndex],
-          lastMessage: { ...updatedChats[chatIndex].lastMessage, status }
-        };
-        useChatStore.setState({ chats: updatedChats });
-      }
-    };
-    
-    const handleMessageDeliveredAck = (data) => {
-      const { messageIds } = data;
-      
-      if (Array.isArray(messageIds) && messageIds.length > 0) {
-        updateMultipleMessagesStatus(messageIds, MESSAGE_STATUS.DELIVERED);
-        
-        const { messages, chats } = useChatStore.getState();
-        messageIds.forEach(messageId => {
-          const updatedMessage = messages.find(m => m._id === messageId);
-          if (updatedMessage && updatedMessage.senderId === authUser._id) {
-            const chatIndex = chats.findIndex(chat => chat.user?._id === updatedMessage.receiverId);
-            if (chatIndex !== -1 && chats[chatIndex].lastMessage?._id === messageId) {
-              const updatedChats = [...chats];
-              updatedChats[chatIndex] = {
-                ...updatedChats[chatIndex],
-                lastMessage: { ...updatedChats[chatIndex].lastMessage, status: MESSAGE_STATUS.DELIVERED }
-              };
-              useChatStore.setState({ chats: updatedChats });
-            }
-          }
-        });
-      }
-    };
-    
-    const handleChatMarkedRead = ({ byUserId }) => {
-      if (byUserId === authUser._id) return;
-      
-      const { chats } = useChatStore.getState();
-      const updatedChats = chats.map(chat => {
-        if (chat.user?._id === byUserId && chat.lastMessage?.senderId === authUser._id) {
-          return {
-            ...chat,
-            lastMessage: { ...chat.lastMessage, status: MESSAGE_STATUS.READ }
-          };
-        }
-        return chat;
-      });
-      useChatStore.setState({ chats: updatedChats });
-    };
-    
-    const handleMessageDeleted = ({ messageId, deletedForEveryone }) => {
-      const { messages, chats } = useChatStore.getState();
-      
-      const chatIndex = chats.findIndex(chat => chat.lastMessage?._id === messageId);
-      if (chatIndex !== -1) {
-        const updatedChats = [...chats];
-        updatedChats[chatIndex] = {
-          ...updatedChats[chatIndex],
-          lastMessage: {
-            ...updatedChats[chatIndex].lastMessage,
-            text: "Mensaje eliminado",
-            image: null,
-            isDeleted: true,
-            deletedForEveryone
-          }
-        };
-        useChatStore.setState({ chats: updatedChats });
-      }
-    };
-    
-    const handleMessageReactionUpdated = ({ messageId, reactions }) => {
-      const { chats, messagesCache, selectedUser } = useChatStore.getState();
-      
-      const chatIndex = chats.findIndex(chat => chat.lastMessage?._id === messageId);
-      if (chatIndex !== -1) {
-        const lastReaction = reactions?.length > 0 ? reactions[reactions.length - 1] : null;
-        
-        let lastReactionUserName = null;
-        if (lastReaction) {
-          const userId = lastReaction.userId?._id || lastReaction.userId;
-          const reactionUser = chats[chatIndex].user?._id === userId 
-            ? chats[chatIndex].user 
-            : null;
-          lastReactionUserName = reactionUser?.fullName?.split(' ')[0] || reactionUser?.fullName || null;
-        }
-        
-        const updatedChats = [...chats];
-        updatedChats[chatIndex] = {
-          ...updatedChats[chatIndex],
-          lastMessage: {
-            ...updatedChats[chatIndex].lastMessage,
-            reactions,
-            lastReactionEmoji: lastReaction?.emoji || null,
-            lastReactionUser: lastReaction?.userId?._id || lastReaction?.userId || null,
-            lastReactionUserName: lastReactionUserName
-          }
-        };
-        useChatStore.setState({ chats: updatedChats });
-      }
-      
-      if (selectedUser && messagesCache[selectedUser._id]) {
-        const updatedMessages = messagesCache[selectedUser._id].map(msg =>
-          msg._id === messageId ? { ...msg, reactions } : msg
-        );
-        useChatStore.setState({
-          messagesCache: {
-            ...messagesCache,
-            [selectedUser._id]: updatedMessages
-          }
-        });
-      }
-    };
-    
-    socket.on("message_status_updated", handleMessageStatusUpdated);
-    socket.on("message_delivered_ack", handleMessageDeliveredAck);
-    socket.on("chat_marked_read", handleChatMarkedRead);
-    socket.on("message_deleted", handleMessageDeleted);
-    socket.on("message_reaction_updated", handleMessageReactionUpdated);
-    
-    return () => {
-      socket.off("message_status_updated", handleMessageStatusUpdated);
-      socket.off("message_delivered_ack", handleMessageDeliveredAck);
-      socket.off("chat_marked_read", handleChatMarkedRead);
-      socket.off("message_deleted", handleMessageDeleted);
-      socket.off("message_reaction_updated", handleMessageReactionUpdated);
-    };
-  }, [socket, authUser, updateMessageStatus, updateMultipleMessagesStatus]);
-
-  useEffect(() => {
-    if (!authUser) return;
-    
-    const interval = setInterval(() => {
-      getMyChatPartners();
-    }, 10000);
-    
-    return () => clearInterval(interval);
-  }, [authUser, getMyChatPartners]);
-
-  if (!authUser) return null;
-  if (isUsersLoading && chats.length === 0) return <UsersLoadingSkeleton />;
-  if (chats.length === 0) return <NoChatsFound />;
+    // IMPORTANTE: Añadí authUser a las dependencias del efecto para que se limpie y remonte correctamente
+  }, [socket, getMyChatPartners, authUser]);
 
   const handleChatClick = (chat) => {
     setSelectedUser(chat.user);

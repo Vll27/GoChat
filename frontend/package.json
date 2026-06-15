@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "axios": "^1.11.0",
+    "chatify-app": "file:..",
     "date-fns": "^4.4.0",
     "emoji-picker-react": "^4.4.11",
     "lucide-react": "^0.542.0",

@@ -12,9 +12,17 @@ export const useChatStore = create((set, get) => ({
   activeTab: 'chats',
   isUsersLoading: false,
   isMessagesLoading: false,
-  messageInputText: '',
-  messagesPagination: {},
-  isSoundEnabled: true, // 👈 ESTADO DEL SONIDO
+  isSoundEnabled: JSON.parse(localStorage.getItem("isSoundEnabled")) !== false,
+  isWindowFocused: true,
+  messageInputText: "",
+  setMessageInputText: (text) => set({ messageInputText: text }),
+  refreshInterval: null,
+  currentFont: localStorage.getItem("gochat-font") || "font-sans",
+
+  changeFont: (fontId) => {
+    localStorage.setItem("gochat-font", fontId);
+    set({ currentFont: fontId });
+  },
 
   setActiveTab: (tab) => {
     set({ activeTab: tab });
@@ -415,51 +423,19 @@ text: messageData.text || '',
         [selectedUser._id]: updatedMessages
       }
     }));
-    
-    console.log(`[STORE] Mensaje ${messageId} actualizado a: ${newText.substring(0, 50)}...`);
-  },
-  
-  deleteMessageFromCache: (messageId) => {
-    const { selectedUser, messagesCache } = get();
-    if (!selectedUser) return;
-    
-    const currentMessages = messagesCache[selectedUser._id] || [];
-    
-    set((state) => ({
-      messagesCache: {
-        ...state.messagesCache,
-        [selectedUser._id]: currentMessages.filter(msg => msg._id !== messageId)
-      }
-    }));
-    
-    console.log(`[STORE] Mensaje ${messageId} eliminado del cache`);
-  },
-  
-  updateMessageReactions: (messageId, reactions) => {
-    const { selectedUser, messagesCache } = get();
-    if (!selectedUser) return;
-    
-    const currentMessages = messagesCache[selectedUser._id] || [];
-    
-    set((state) => ({
-      messagesCache: {
-        ...state.messagesCache,
-        [selectedUser._id]: currentMessages.map(msg =>
-          msg._id === messageId 
-            ? { ...msg, reactions }
-            : msg
-        )
-      }
-    }));
-  },
-  
-  updateLastMessageReaction: (messageId, reactions) => {
-    const { chats } = get();
-    
-    const chatIndex = chats.findIndex(chat => chat.lastMessage?._id === messageId);
-    
-    if (chatIndex !== -1) {
-      const lastReaction = reactions?.length > 0 ? reactions[reactions.length - 1] : null;
+
+    socket.on("chatsUpdated", () => {
+      // ✋ GUARDIÁN PERIMETRAL: Si el usuario ya le dio Logout, frená en seco y no llamés a Axios
+      if (!useAuthStore.getState().authUser) return;
+
+      console.log("🔄 chatsUpdated recibido - Recargando lista de chats...");
+      forceRefreshChats();
+    });
+
+    socket.on("userStatusChanged", ({ userId, status, lastSeen }) => {
+      if (!useAuthStore.getState().authUser) return;
+
+      console.log(`📱 ChatStore recibió cambio de estado: ${userId} -> ${status}`);
       
       let lastReactionUserName = null;
       if (lastReaction) {
@@ -483,7 +459,33 @@ text: messageData.text || '',
       };
       
       set({ chats: updatedChats });
-      console.log(`[STORE] Chat ${chatIndex} actualizado con reacción ${lastReaction?.emoji} de ${lastReactionUserName || 'alguien'}`);
+      
+      if (selectedUser?._id === userId) {
+        set({
+          selectedUser: {
+            ...selectedUser,
+            lastSeenStatus: status,
+            lastSeen: lastSeen
+          }
+        });
+      }
+      
+      // 👈 FORZAR RECARGA COMPLETA PARA ASEGURAR
+      setTimeout(() => {
+        if (!useAuthStore.getState().authUser) return; // Si ya se fue, abortá el temporizador
+        forceRefreshChats();
+      }, 500);
+    });
+  },
+
+  unsubscribeFromMessages: () => {
+    const socket = useAuthStore.getState().socket;
+    if (socket) {
+      console.log("🔌 Desuscribiéndose de mensajes...");
+      socket.off("newMessage");
+      socket.off("messageNotification");
+      socket.off("chatsUpdated");
+      socket.off("userStatusChanged");
     }
   },
   

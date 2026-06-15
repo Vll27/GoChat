@@ -14,9 +14,7 @@ function App() {
   const { checkAuth, isCheckingAuth, authUser, socket } = useAuthStore();
   const { subscribeToMessages, unsubscribeFromMessages } = useChatStore();
   const appBgColor = useConfigStore((state) => state.appBgColor);
-  
-  const isWindowFocused = useRef(true);
-  const isSubscribed = useRef(false);
+  const { currentFont } = useChatStore();
 
   useEffect(() => {
     checkAuth();
@@ -117,7 +115,8 @@ function App() {
 
   return (
     <div 
-      className="h-screen w-screen relative overflow-hidden transition-colors duration-500 ease-in-out flex flex-col"
+      // Cambiamos 'min-h-screen' por 'h-screen w-screen' para asegurar que el div ocupe toda la pantalla real
+      className={`h-screen w-screen relative overflow-hidden transition-colors duration-500 ease-in-out flex flex-col ${currentFont}`}
       style={{ 
         backgroundColor: appBgColor || "#000000" 
       }}

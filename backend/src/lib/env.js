@@ -7,13 +7,13 @@ export const ENV = {
   
   // Database
   MONGO_URI: process.env.MONGO_URI,
+  NODE_ENV: process.env.NODE_ENV,
+  JWT_SECRET: process.env.JWT_SECRET,
+  CLIENT_URL: process.env.CLIENT_URL,
   
   // Auth
   JWT_SECRET: process.env.JWT_SECRET,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "7d",
-  
-  // Frontend
-  CLIENT_URL: process.env.CLIENT_URL || "http://localhost:5173",
   
   // Email (Resend)
   RESEND_API_KEY: process.env.RESEND_API_KEY,

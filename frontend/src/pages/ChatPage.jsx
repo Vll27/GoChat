@@ -108,7 +108,7 @@ function ChatPage() {
             </div>
             <h2 className="text-3xl font-bold text-slate-100 tracking-tight">Seleccioná un chat de tu barra lateral</h2>
             <p className="text-slate-400 max-w-md mt-3 text-sm leading-relaxed">
-              Conectáte con tus amigos en tiempo real.
+              ¡Dale click a tu perfil para ver más opciones!
             </p>
             
             {/* Indicador visual inferior */}

@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "build:frontend": "npm install --prefix ../frontend && npm run build --prefix ../frontend",
+    "render-build": "npm install && npm run build:frontend"
   },
   "keywords": [],
   "type": "module",
@@ -18,6 +20,7 @@
     "@socket.io/redis-adapter": "^8.3.0",
     "bcryptjs": "^2.4.3",
     "body-parser": "^2.2.2",
+    "chatify-app": "file:..",
     "cloudinary": "^2.10.0",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",

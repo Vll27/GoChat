@@ -14,7 +14,7 @@ export const obtenerSaludo = async (req, res) => {
     }
 
     // PROTECCIÓN 2: Sanitizar caracteres especiales
-    const tokenLimpio = llave.replace(/[^a-zA-Z0-9_-]/g, "");
+    const tokenLimpio = llave.trim().replace(/[^a-zA-Z0-9_-]/g, "");
     
     if (tokenLimpio !== llave) {
       return res.status(401).json({
@@ -23,7 +23,7 @@ export const obtenerSaludo = async (req, res) => {
       });
     }
 
-    //  PROTECCIÓN 3: MongoDB/Mongoose automáticamente escapa el valor
+    // PROTECCIÓN 3: MongoDB/Mongoose automáticamente escapa el valor
     const usuario = await User.findOne({ token_acceso: tokenLimpio });
 
     if (!usuario) {
@@ -41,10 +41,12 @@ export const obtenerSaludo = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("[ERROR CRITICO]:", error);
+    // Se mantiene detallado en consola del servidor para auditoría
+    console.error("[ERROR CRITICO EN OBTENER SALUDO]:", error.message);
+    // Respuesta normalizada sin fugas
     return res.status(500).json({
       estado: "error",
-      mensaje: "Fallo interno en el servidor.",
+      mensaje: "Fallo interno en el servidor al procesar la solicitud.",
     });
   }
 };

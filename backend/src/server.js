@@ -23,71 +23,83 @@ import { app, server } from "./lib/socket.js";
 const __dirname = path.resolve();
 const PORT = ENV.PORT || 3000;
 
-// ==================== MIDDLEWARE DE SEGURIDAD ====================
+// ==================== MIDDLEWARE DE SEGURIDAD Y RENDIMIENTO ====================
 
-// ✅ Helmet para seguridad
+// Helmet para endurecer cabeceras HTTP en producción
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
 }));
 
-// ✅ Compression para rendimiento
+// Gzip compression para acelerar la carga del monolito
 app.use(compression());
 
-// ✅ Rate limiting SOLO para rutas sensibles (NO para todas)
+// Rate limiting selectivo para proteger la API de abusos
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 50, // 50 intentos por IP
-  message: "Demasiados intentos, intenta más tarde",
+  message: "Demasiados intentos desde esta IP, por favor intenta más tarde.",
   skipSuccessfulRequests: true,
 });
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
   max: 100, // 100 peticiones por minuto
-  message: "Demasiadas peticiones, espera un momento",
-  skip: () => ENV.NODE_ENV === "development", // Saltar en desarrollo
+  message: "Demasiadas peticiones consecutivas, espera un momento.",
+  skip: () => ENV.NODE_ENV === "development",
 });
 
-// ==================== MANEJO DE ERRORES DE CONEXIÓN ====================
+// ==================== MANEJO PERIMETRAL DE ERRORES DE CONEXIÓN ====================
 
 app.use((req, res, next) => {
   req.on('error', (err) => {
     if (err.code === 'ECONNRESET') {
-      console.log('⚠️ Client connection reset');
+      console.log('⚠️ Client connection reset detectado en el flujo perimetral.');
     }
   });
   res.on('error', (err) => {
     if (err.code === 'ECONNRESET') {
-      console.log('⚠️ Response connection reset');
+      console.log('⚠️ Response connection reset detectado.');
     }
   });
   next();
 });
 
+// Payload Sizing estricto (Equilibrio de capacidad: subida de imágenes optimizada a 10mb)
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
-// ==================== CORS CORREGIDO ====================
+// ==================== CORS CONFIGURACIÓN COMPARTIDA Y CONTEXTUAL ====================
 
 const corsOptions = {
   origin: function (origin, callback) {
-    const allowedOrigins = [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "http://127.0.0.1:5173",
-      "http://192.168.0.6:5173",
-      ENV.CLIENT_URL
-    ].filter(Boolean);
-    
-    // Permitir peticiones sin origin (como Postman) y en desarrollo
+    // 1. Mapeamos los orígenes permitidos y les removemos la barra final '/' si la llevan
+    const rawOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5173",
+  "http://192.168.0.6:5173",
+  "http://localhost:5001", // 👈 Agregá este maje aquí para que deje de joder
+  ENV.CLIENT_URL
+];
+
+    const allowedOrigins = rawOrigins
+      .filter(Boolean)
+      .map(url => url.trim().replace(/\/$/, "")); // Quita la barra diagonal del final obligatoriamente
+
+    // 2. Permitir peticiones sin origen (como Postman o llamadas del mismo servidor)
     if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.includes(origin) || ENV.NODE_ENV !== "production") {
+
+    // Saneamos también el origen entrante por seguridad
+    const cleanOrigin = origin.trim().replace(/\/$/, "");
+
+    // 3. Validación flexible
+    if (ENV.NODE_ENV !== "production" || allowedOrigins.includes(cleanOrigin)) {
       callback(null, true);
     } else {
-      console.log("❌ CORS bloqueado para origen:", origin);
+      console.log("❌ CORS bloqueado para origen real:", origin);
+      console.log("📋 Orígenes permitidos en el backend:", allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -103,7 +115,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-// ==================== DEBUG MIDDLEWARE (solo desarrollo) ====================
+// ==================== DEBUG MIDDLEWARE (Solo desarrollo) ====================
 
 if (ENV.NODE_ENV === "development") {
   app.use((req, res, next) => {
@@ -112,9 +124,9 @@ if (ENV.NODE_ENV === "development") {
   });
 }
 
-// ==================== RUTAS ====================
+// ==================== RUTAS DE LA API ====================
 
-// Health check
+// Health check para monitoreo en Render
 app.get("/health", (req, res) => {
   res.status(200).json({ 
     status: "OK", 
@@ -123,73 +135,78 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Rutas públicas (con rate limit específico)
 app.use("/api/auth", authLimiter, authRoutes);
-
-// Rutas API (con rate limit más permisivo)
 app.use("/api/messages", apiLimiter, messageRoutes);
 app.use("/api/contacts", apiLimiter, contactRoutes);
 app.use("/api", accesoRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/message-status", apiLimiter, messageStatusRoutes);
 
-// ==================== MANEJO DE ERRORES ====================
+// ==================== ACOPLAMIENTO MONOLÍTICO: ARCHIVOS ESTÁTICOS ====================
+
+if (ENV.NODE_ENV === "production") {
+  const distPath = path.join(__dirname, "../frontend/dist");
+  
+  // Servir de forma nativa los recursos compilados de React
+  app.use(express.static(distPath));
+
+  // Catch-All (Ruta comodín): Delega el manejo de URLs al React Router de la SPA
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+} else {
+  app.get("/", (req, res) => {
+    res.status(200).json({ mensaje: "API del Servidor corriendo en modo de desarrollo local." });
+  });
+}
+
+// ==================== GESTIÓN DE EXCEPCIONES GLOBAL HIGIENIZADA ====================
 
 app.use((error, req, res, next) => {
   if (error.code === 'ECONNRESET') {
-    console.log('⚠️ Connection reset by client');
+    console.log('⚠️ Connection reset by client interceptado globalmente.');
     return;
   }
   
   if (error.type === 'entity.too.large') {
-    return res.status(413).json({ message: 'Archivo demasiado grande' });
+    return res.status(413).json({ message: 'El archivo que intentas subir excede el límite permitido.' });
   }
   
   if (error.message === 'Not allowed by CORS') {
-    return res.status(403).json({ message: 'CORS policy blocked this request' });
+    return res.status(403).json({ message: 'Acceso denegado por políticas de CORS de producción.' });
   }
   
-  console.error("❌ Error:", error.message);
-  res.status(500).json({ message: 'Error interno del servidor' });
+  // Auditoría en consola interna del servidor (Sin fugas de infraestructura hacia el cliente)
+  console.error("❌ [MANEJADOR GLOBAL DE ERRORES]:", error.message || error);
+  res.status(500).json({ message: 'Error interno en el servidor al procesar la solicitud.' });
 });
 
-// ==================== PRODUCCIÓN ====================
-
-if (ENV.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "../frontend/dist")));
-  app.get("*", (_, res) => {
-    res.sendFile(path.join(__dirname, "../frontend", "dist", "index.html"));
-  });
-}
-
-// ==================== MANEJO DE PROCESOS ====================
+// ==================== MANEJO DE PROCESOS Y SHUTDOWN CONTROLADO ====================
 
 process.on('uncaughtException', (error) => {
-  console.error('💥 Uncaught Exception:', error.message);
-  console.error(error.stack);
-  // No cerrar el proceso en desarrollo
+  console.error('💥 Excepción No Controlada (Uncaught Exception):', error.message || error);
   if (ENV.NODE_ENV === "production") {
     process.exit(1);
   }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('💥 Unhandled Rejection:', reason);
+  console.error('💥 Promesa Rechazada No Manejada en:', promise, 'Razón:', reason);
   if (ENV.NODE_ENV === "production") {
     process.exit(1);
   }
 });
 
-// Graceful shutdown
+// Cierre controlado (Graceful Shutdown) exigido para despliegues limpios en la nube
 const shutdown = async () => {
-  console.log('🛑 Cerrando servidor...');
+  console.log('🛑 Cerrando procesos del servidor de forma ordenada...');
   server.close(() => {
-    console.log('✅ Servidor cerrado');
+    console.log('✅ Servidor HTTP y Sockets cerrados exitosamente.');
     process.exit(0);
   });
   
   setTimeout(() => {
-    console.error('⚠️ Timeout forzado');
+    console.error('⚠️ Timeout forzado de apagado.');
     process.exit(1);
   }, 10000);
 };
@@ -197,11 +214,11 @@ const shutdown = async () => {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-// ==================== INICIO ====================
+// ==================== INICIO DEL SERVICIO ====================
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port: ${PORT}`);
-  console.log(`🌍 Environment: ${ENV.NODE_ENV || 'development'}`);
-  console.log(`🔗 Client URL: ${ENV.CLIENT_URL || 'http://localhost:5173'}`);
+  console.log(`🚀 Servidor corriendo de forma nativa en el puerto: ${PORT}`);
+  console.log(`🌍 Entorno activo: ${ENV.NODE_ENV || 'development'}`);
+  console.log(`🔗 URL del cliente configurada: ${ENV.CLIENT_URL || 'http://localhost:5173'}`);
   connectDB();
 });

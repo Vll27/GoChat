@@ -7,6 +7,7 @@ import BorderAnimatedContainer from "../components/BorderAnimatedContainer";
 import WallpaperConfig from "../components/WallpaperConfig";
 import ThemeConfig from "../components/ThemeConfig";
 import AppColor from "../components/AppColor.jsx";
+import TextFont from "../components/TextFontConfig.jsx";
 
 function ConfigPage() {
   const { activeConfigTab, setActiveConfigTab, isSubConfigOpen, setIsSubConfigOpen } = useConfigStore();
@@ -137,7 +138,7 @@ function ConfigPage() {
   <div className="w-full h-full flex-1 min-h-0 text-slate-200">
     {activeConfigTab === "fondo" && <WallpaperConfig />}
     {activeConfigTab === "colores" && <ThemeConfig />} {/* ← Reemplazado aquí */}
-    {activeConfigTab === "fuentes" && <p className="text-center pt-10">Componente de Fuentes en desarrollo...</p>}
+    {activeConfigTab === "fuentes" && <TextFont />}
     {activeConfigTab === "appColor" && <AppColor />}
   </div>
 </div>
