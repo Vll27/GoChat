@@ -7,6 +7,7 @@ import { MESSAGE_STATUS, shouldUpdateStatus } from '../utils/messageStatusUtils'
 export const useChatStore = create((set, get) => ({
   selectedUser: null,
   messagesCache: {},
+  messagesPagination: {}, // 🔑 LA VARIABLE SALVADORA QUE TU COMPAÑERO OLVIDÓ
   chats: [],
   allContacts: [],
   activeTab: 'chats',
@@ -109,7 +110,13 @@ export const useChatStore = create((set, get) => ({
       
       const res = await axiosInstance.get(url);
       
-      const messagesWithMeta = res.data.messages.map(msg => ({
+// 🔑 Capa de seguridad intermedia
+      const dataFormatMessages = res.data && res.data.messages 
+  ? res.data.messages 
+  : (Array.isArray(res.data) ? res.data : []);
+
+// Ahora mapeas sobre la variable segura (ya no usas res.data.messages)
+      const messagesWithMeta = dataFormatMessages.map(msg => ({
         ...msg,
         createdAt: msg.createdAt || new Date().toISOString(),
         editedAt: msg.editedAt || null,
@@ -397,9 +404,14 @@ text: messageData.text || '',
       console.log(`Mensaje agregado al cache para chat ${chatUserId}: ${message._id}`);
     }
   },
+
+  // Alias de compatibilidad para hooks viejos del merge
+  addMessage: (message) => {
+    get().addMessageToCache(message);
+  },
   
   updateMessageText: (messageId, newText) => {
-    const { selectedUser, messagesCache } = get();
+    const { selectedUser, messagesCache, chats } = get();
     if (!selectedUser) return;
     
     const currentMessages = messagesCache[selectedUser._id] || [];
@@ -423,59 +435,101 @@ text: messageData.text || '',
         [selectedUser._id]: updatedMessages
       }
     }));
+    const updatedChats = chats.map(chat => {
+      if (chat.user?._id !== selectedUser._id) return chat;
 
-    socket.on("chatsUpdated", () => {
-      // ✋ GUARDIÁN PERIMETRAL: Si el usuario ya le dio Logout, frená en seco y no llamés a Axios
-      if (!useAuthStore.getState().authUser) return;
-
-      console.log("🔄 chatsUpdated recibido - Recargando lista de chats...");
-      forceRefreshChats();
+      const isLastMessage = chat.lastMessage?._id === messageId;
+      return {
+        ...chat,
+        lastMessage: isLastMessage
+          ? {
+              ...chat.lastMessage,
+              text: newText,
+              editedAt,
+              isEdited: true,
+              originalText: chat.lastMessage.originalText || chat.lastMessage.text,
+            }
+          : chat.lastMessage,
+      };
     });
 
-    socket.on("userStatusChanged", ({ userId, status, lastSeen }) => {
-      if (!useAuthStore.getState().authUser) return;
+    set({ chats: updatedChats });
+  },
 
-      console.log(`📱 ChatStore recibió cambio de estado: ${userId} -> ${status}`);
-      
-      let lastReactionUserName = null;
-      if (lastReaction) {
-        const userId = lastReaction.userId?._id || lastReaction.userId;
-        const reactionUser = chats[chatIndex].user?._id === userId 
-          ? chats[chatIndex].user 
-          : null;
-        lastReactionUserName = reactionUser?.fullName?.split(' ')[0] || reactionUser?.fullName || null;
+  updateMessageReactions: (messageId, reactions) => {
+    const { selectedUser, messagesCache, chats } = get();
+    if (!selectedUser) return;
+
+    const currentMessages = messagesCache[selectedUser._id] || [];
+    const updatedMessages = currentMessages.map(msg =>
+      msg._id === messageId ? { ...msg, reactions } : msg
+    );
+
+    set((state) => ({
+      messagesCache: {
+        ...state.messagesCache,
+        [selectedUser._id]: updatedMessages
       }
-      
-      const updatedChats = [...chats];
-      updatedChats[chatIndex] = {
-        ...updatedChats[chatIndex],
+    }));
+
+    const lastReaction = reactions?.[reactions.length - 1] || null;
+    const lastReactionUserId = lastReaction?.userId?._id || lastReaction?.userId || null;
+    const lastReactionUserName = null;
+
+    const updatedChats = chats.map(chat => {
+      if (chat.user?._id !== selectedUser._id) return chat;
+      if (chat.lastMessage?._id !== messageId) return chat;
+
+      return {
+        ...chat,
         lastMessage: {
-          ...updatedChats[chatIndex].lastMessage,
+          ...chat.lastMessage,
           reactions,
           lastReactionEmoji: lastReaction?.emoji || null,
-          lastReactionUser: lastReaction?.userId?._id || lastReaction?.userId || null,
-          lastReactionUserName: lastReactionUserName
+          lastReactionUser: lastReactionUserId,
+          lastReactionUserName,
         }
       };
-      
-      set({ chats: updatedChats });
-      
-      if (selectedUser?._id === userId) {
-        set({
-          selectedUser: {
-            ...selectedUser,
-            lastSeenStatus: status,
-            lastSeen: lastSeen
-          }
-        });
-      }
-      
-      // 👈 FORZAR RECARGA COMPLETA PARA ASEGURAR
-      setTimeout(() => {
-        if (!useAuthStore.getState().authUser) return; // Si ya se fue, abortá el temporizador
-        forceRefreshChats();
-      }, 500);
     });
+
+    set({ chats: updatedChats });
+  },
+
+  updateLastMessageReaction: (messageId, reactions) => {
+    get().updateMessageReactions(messageId, reactions);
+  },
+
+  deleteMessageFromCache: (messageId) => {
+    const { selectedUser, messagesCache, chats } = get();
+    if (!selectedUser) return;
+
+    const currentMessages = messagesCache[selectedUser._id] || [];
+    const updatedMessages = currentMessages.filter(msg => msg._id !== messageId);
+
+    set((state) => ({
+      messagesCache: {
+        ...state.messagesCache,
+        [selectedUser._id]: updatedMessages
+      }
+    }));
+
+    const updatedChats = chats.map(chat => {
+      if (chat.user?._id !== selectedUser._id) return chat;
+      if (chat.lastMessage?._id !== messageId) return chat;
+
+      return {
+        ...chat,
+        lastMessage: {
+          ...chat.lastMessage,
+          text: "Mensaje eliminado",
+          image: null,
+          mediaType: null,
+          isDeleted: true,
+        }
+      };
+    });
+
+    set({ chats: updatedChats });
   },
 
   unsubscribeFromMessages: () => {

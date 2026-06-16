@@ -154,13 +154,13 @@ export const login = async (req, res) => {
     
     // Alerta genérica para evitar enumeración maliciosa de credenciales
     if (!user) {
-      return res.status(400).json({ message: "Credenciales no válidas." });
+      return res.status(401).json({ message: "Credenciales no válidas." });
     }
 
     const isPasswordCorrect = await bcrypt.compare(cleanPassword, user.password);
     
     if (!isPasswordCorrect) {
-      return res.status(400).json({ message: "Credenciales no válidas. Inténtelo de nuevo." });
+      return res.status(401).json({ message: "Credenciales no válidas. Inténtelo de nuevo." });
     }
 
     user.lastSeen = new Date();
@@ -179,12 +179,6 @@ export const login = async (req, res) => {
     });
   } catch (error) {
     console.error("Error en el controlador de login:", error.message);
-    
-    if (error.code === 'ECONNRESET' || error.name === 'MongoNetworkError') {
-      return res.status(503).json({ 
-        message: "Problema temporal con la base de datos. Por favor, intenta de nuevo." 
-      });
-    }
     
     res.status(500).json({ message: "Error interno del servidor al procesar el inicio de sesión." });
   }

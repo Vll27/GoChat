@@ -20,6 +20,7 @@ function ChatsList({ compact = false }) {
   } = useChatStore();
 
   const { onlineUsers, socket, authUser } = useAuthStore();
+  const isMounted = useRef(true); // 👈 Inicializado en true porque el componente se está montando
 
   useEffect(() => {
     // Si no hay un usuario autenticado, salite inmediatamente y frená la petición huérfana ✋

@@ -28,7 +28,21 @@ const PORT = ENV.PORT || 3000;
 // Helmet para endurecer cabeceras HTTP en producción
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
-  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      // Permitir scripts y estilos del propio servidor y estilos en línea de React
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      // 📷 Permitir imágenes locales y de tu cuenta de Cloudinary
+      imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
+      // 📹 Permitir videos locales y de tu cuenta de Cloudinary
+      mediaSrc: ["'self'", "data:", "https://res.cloudinary.com"],
+      // 🔌 Permitir conexiones de la API, WebSockets y URIs de datos
+      connectSrc: ["'self'", "data:", "ws:", "wss:"],
+    },
+  },
 }));
 
 // Gzip compression para acelerar la carga del monolito
@@ -144,21 +158,24 @@ app.use("/api/message-status", apiLimiter, messageStatusRoutes);
 
 // ==================== ACOPLAMIENTO MONOLÍTICO: ARCHIVOS ESTÁTICOS ====================
 
-if (ENV.NODE_ENV === "production") {
-  const distPath = path.join(__dirname, "../frontend/dist");
-  
-  // Servir de forma nativa los recursos compilados de React
-  app.use(express.static(distPath));
+const distPath = path.resolve(__dirname, "../../GoChat/frontend/dist");
+// Servir de forma nativa los recursos compilados de React
+console.log("👉 Ruta del Frontend compilado:", distPath);
+app.use(express.static(distPath));
 
-  // Catch-All (Ruta comodín): Delega el manejo de URLs al React Router de la SPA
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(distPath, "index.html"));
+// Catch-All (Ruta comodín): Delega el manejo de URLs al React Router de la SPA
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api")) {
+    return next();
+  }
+
+  res.sendFile(path.join(distPath, "index.html"), (err) => {
+    if (err) {
+      console.error("❌ Error al enviar index.html:", err.message);
+      return res.status(500).json({ error: "El contenedor estático index.html no fue localizado." });
+    }
   });
-} else {
-  app.get("/", (req, res) => {
-    res.status(200).json({ mensaje: "API del Servidor corriendo en modo de desarrollo local." });
-  });
-}
+});
 
 // ==================== GESTIÓN DE EXCEPCIONES GLOBAL HIGIENIZADA ====================
 

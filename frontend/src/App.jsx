@@ -10,7 +10,10 @@ import PageLoader from "./components/PageLoader";
 import { Toaster } from "react-hot-toast";
 import { useConfigStore } from "./store/useConfigStore";
 
+
 function App() {
+  const isWindowFocused = useRef(document.hasFocus());
+  const isSubscribed = useRef(false); // 👈 Agrega esta línea mágica
   const { checkAuth, isCheckingAuth, authUser, socket } = useAuthStore();
   const { subscribeToMessages, unsubscribeFromMessages } = useChatStore();
   const appBgColor = useConfigStore((state) => state.appBgColor);
