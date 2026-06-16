@@ -158,8 +158,7 @@ app.use("/api/message-status", apiLimiter, messageStatusRoutes);
 
 // ==================== ACOPLAMIENTO MONOLÍTICO: ARCHIVOS ESTÁTICOS ====================
 
-const distPath = path.resolve(__dirname, "../../GoChat/frontend/dist");
-// Servir de forma nativa los recursos compilados de React
+const distPath = path.resolve(process.cwd(), "../frontend/dist");// Servir de forma nativa los recursos compilados de React
 console.log("👉 Ruta del Frontend compilado:", distPath);
 app.use(express.static(distPath));
 
